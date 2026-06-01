@@ -1,0 +1,66 @@
+"""抓取器基类和通用数据结构"""
+
+from __future__ import annotations
+
+import time
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+
+
+class FetchMode(Enum):
+    """抓取模式"""
+    HTTP = "http"          # 纯 HTTP（curl_cffi，最快）
+    BROWSER = "browser"    # 浏览器（Playwright，支持 JS）
+    STEALTH = "stealth"    # 隐身（Scrapling StealthyFetcher，最强反检测）
+    AUTO = "auto"          # 自动选择最佳模式
+
+
+@dataclass
+class FetchResult:
+    """抓取结果"""
+    url: str
+    status_code: int
+    html: str
+    headers: dict
+    cookies: dict
+    mode_used: FetchMode  # 实际使用的模式
+    elapsed: float        # 耗时（秒）
+    blocked: bool = False # 是否被 WAF 拦截
+    markdown: str = ""    # LLM 友好的 Markdown
+    text: str = ""        # 纯文本
+    _content: Optional[bytes] = field(default=None, repr=False)
+
+    @property
+    def ok(self) -> bool:
+        return 200 <= self.status_code < 400 and not self.blocked
+
+    def __repr__(self) -> str:
+        return f"<FetchResult {self.status_code} [{self.mode_used.value}] {self.url[:60]}>"
+
+
+class BaseFetcher(ABC):
+    """抓取器基类"""
+
+    mode: FetchMode
+
+    @abstractmethod
+    async def fetch(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        headers: Optional[dict] = None,
+        proxy: Optional[str] = None,
+        timeout: float = 30.0,
+        **kwargs,
+    ) -> FetchResult:
+        """执行抓取"""
+        ...
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
