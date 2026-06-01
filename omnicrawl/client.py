@@ -11,6 +11,7 @@ from typing import Optional
 from omnicrawl.fetchers.base import FetchMode, FetchResult
 from omnicrawl.fetchers.http_fetcher import HttpFetcher
 from omnicrawl.fetchers.browser_fetcher import BrowserFetcher
+from omnicrawl.fetchers.camoufox_fetcher import CamoufoxFetcher
 from omnicrawl.fetchers.stealth_fetcher import StealthFetcher
 from omnicrawl.fingerprint.tls import TLSFingerprint
 from omnicrawl.proxy.rotator import ProxyRotator
@@ -22,8 +23,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("client")
 
-# 被封时的降级顺序
-FALLBACK_ORDER = [FetchMode.HTTP, FetchMode.BROWSER, FetchMode.STEALTH]
+# 被封时的降级顺序（从快到慢，从弱到强）
+FALLBACK_ORDER = [FetchMode.HTTP, FetchMode.BROWSER, FetchMode.CAMOUFOX, FetchMode.STEALTH]
 
 
 class OmniClient:
@@ -100,6 +101,8 @@ class OmniClient:
                 self._fetchers[mode] = HttpFetcher(fingerprint=fp)
             elif mode == FetchMode.BROWSER:
                 self._fetchers[mode] = BrowserFetcher()
+            elif mode == FetchMode.CAMOUFOX:
+                self._fetchers[mode] = CamoufoxFetcher()
             elif mode == FetchMode.STEALTH:
                 self._fetchers[mode] = StealthFetcher()
         return self._fetchers[mode]

@@ -13,7 +13,8 @@ class FetchMode(Enum):
     """抓取模式"""
     HTTP = "http"          # 纯 HTTP（curl_cffi，最快）
     BROWSER = "browser"    # 浏览器（Playwright，支持 JS）
-    STEALTH = "stealth"    # 隐身（Scrapling StealthyFetcher，最强反检测）
+    CAMOUFOX = "camoufox"  # 反检测浏览器（Firefox 原生修改，绕过 JS 环境检测）
+    STEALTH = "stealth"    # 隐身（Scrapling StealthyFetcher）
     AUTO = "auto"          # 自动选择最佳模式
 
 

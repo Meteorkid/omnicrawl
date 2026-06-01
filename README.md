@@ -56,7 +56,8 @@
 |------|------|
 | 🔒 **TLS 指纹伪装** | 37+ 浏览器指纹（Chrome/Safari/Firefox/Edge/Tor），绕过 JA3/JA4 检测 |
 | 🛡️ **WAF 绕过** | 阿里云 WAF、Cloudflare、Akamai 等专用策略配置 |
-| 🔄 **自动降级** | HTTP → Browser → Stealth，被封时自动切换更隐蔽的方案 |
+| 🦊 **Camoufox** | Firefox 原生反检测浏览器，绕过 JS 环境检测（51job 等强反爬站点） |
+| 🔄 **自动降级** | HTTP → Browser → Camoufox → Stealth，被封时自动切换 |
 | 🌐 **代理轮换** | 支持轮询/随机/加权策略，内置代理健康检查 |
 | ⏱️ **智能限速** | 基于域名的自适应延时，被封自动退避，成功自动恢复 |
 | 📝 **LLM 输出** | 自动去除导航/广告/脚本，输出干净 Markdown，Token 计数 |

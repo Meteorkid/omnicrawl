@@ -26,8 +26,8 @@ class WAFProfile:
 WAF_PROFILES: dict[str, WAFProfile] = {
     "aliyun_waf": WAFProfile(
         name="阿里云 WAF",
-        description="阿里云 Web 应用防火墙，TLS 指纹 + JS 挑战 + IP 信誉",
-        recommended_mode=FetchMode.STEALTH,
+        description="阿里云 Web 应用防火墙，TLS 指纹 + JS 挑战 + IP 信誉。需要 Camoufox 绕过 JS 环境检测",
+        recommended_mode=FetchMode.CAMOUFOX,
         tls_fingerprints=["chrome136", "chrome142", "safari180"],
         needs_js=True,
         min_delay=3.0,
