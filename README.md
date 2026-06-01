@@ -40,13 +40,17 @@
 
 ### 实测对比
 
-| 方案 | example.com | 百度 | 淘宝 | 京东 |
-|------|-------------|------|------|------|
-| `requests` | ❌ 被封 | ❌ 被封 | ❌ 被封 | ❌ 被封 |
-| **curl_cffi (OmniCrawl)** | ✅ 0.6s | ✅ 0.1s | ✅ 0.1s | ✅ 0.1s |
-| Scrapling Stealthy | ✅ 2.0s | ❌ 超时 | ❌ 超时 | ❌ 超时 |
+| 方案 | example.com | 百度 | 淘宝 | 京东 | 51job |
+|------|-------------|------|------|------|-------|
+| `requests` | ❌ 被封 | ❌ 被封 | ❌ 被封 | ❌ 被封 | ❌ 被封 |
+| **curl_cffi** | ✅ 0.6s | ✅ 0.1s | ✅ 0.1s | ✅ 0.1s | ❌ WAF 验证页 |
+| Scrapling Stealthy | ✅ 2.0s | ❌ 超时 | ❌ 超时 | ❌ 超时 | ❌ bug |
+| **Camoufox** | ✅ 14.8s | - | - | - | ✅ 绕过 JS 检测 |
 
-> 结论：curl_cffi 解决 90% 的场景，StealthyFetcher 是 JS 挑战场景的 fallback。
+> 结论：
+> - curl_cffi 解决 90% 的场景（TLS 指纹检测）
+> - Camoufox 解决 JS 环境检测（51job 等强反爬站点）
+> - 自动降级：curl_cffi 被封 → 自动切换 Camoufox
 
 ---
 
@@ -272,7 +276,8 @@ result.ok            # 是否成功 (2xx 且未被拦截)
 |------|------|------|---------|--------|----------|
 | `HTTP` | curl_cffi | ⚡ 最快 | ❌ | ⭐⭐⭐ | 静态页面、API |
 | `BROWSER` | Playwright | 🐢 中等 | ✅ | ⭐⭐ | JS 渲染页面 |
-| `STEALTH` | Scrapling | 🐢 较慢 | ✅ | ⭐⭐⭐⭐⭐ | Cloudflare、强反爬 |
+| `CAMOUFOX` | Camoufox | 🐢 较慢 | ✅ | ⭐⭐⭐⭐⭐ | 51job、阿里云 WAF（JS 环境检测） |
+| `STEALTH` | Scrapling | 🐢 较慢 | ✅ | ⭐⭐⭐⭐ | Cloudflare Turnstile |
 | `AUTO` | 自动选择 | - | - | - | 通用（推荐） |
 
 ### TLSFingerprint
@@ -395,7 +400,9 @@ parser.meta("description")                # meta 标签
 
 ### 阿里云 WAF
 
-阿里云 WAF 主要通过 TLS/JA3 指纹检测爬虫。curl_cffi 直接在底层解决：
+阿里云 WAF 有两种检测方式：
+
+**方式一：TLS 指纹检测**（大部分站点）→ curl_cffi 解决
 
 ```python
 async with OmniClient(
@@ -406,6 +413,23 @@ async with OmniClient(
 ) as client:
     result = await client.get("https://target.com")
 ```
+
+**方式二：JS 环境检测**（51job 等强反爬站点）→ 需要 Camoufox
+
+```python
+async with OmniClient(
+    mode=FetchMode.CAMOUFOX,
+    waf="aliyun_waf",
+    proxy_pool=["http://user:pass@residential:port"],
+    min_delay=3.0,
+) as client:
+    result = await client.get("https://51job.com")
+```
+
+> **为什么 Camoufox 能绕过？**
+> Camoufox 是 Firefox 的原生修改版，指纹注入发生在浏览器引擎内部（非 JS 注入）。
+> 阿里云 WAF 检测 `navigator.webdriver`、`window.chrome`、Canvas/WebGL 指纹等，
+> Camoufox 在这些检测面前表现得和真实 Firefox 一模一样。
 
 ### Cloudflare
 
@@ -456,11 +480,12 @@ async with AsyncSession(impersonate=fp.next()) as s:
         │
         └─ _fetch_with_retry (重试: 指数退避, 指纹轮换)
             │
-            └─ _fetch_with_fallback (降级: HTTP → Browser → Stealth)
+            └─ _fetch_with_fallback (降级: HTTP → Browser → Camoufox → Stealth)
                 │
                 ├─ HttpFetcher      [curl_cffi]   0.1-0.6s, 最快
                 ├─ BrowserFetcher   [Playwright]  1-5s, JS 渲染
-                └─ StealthFetcher   [Scrapling]   2-30s, 最强反检测
+                ├─ CamoufoxFetcher  [Camoufox]    5-15s, Firefox 反检测
+                └─ StealthFetcher   [Scrapling]   2-30s, Cloudflare 绕过
                         │
                         ├─ 自动检测被封 (HTTP 403/429)
                         ├─ 自动切换更隐蔽的方案
@@ -471,13 +496,15 @@ async with AsyncSession(impersonate=fp.next()) as s:
 
 ```
 AUTO 模式:
-  1. HttpFetcher (curl_cffi, 最快)
+  1. HttpFetcher (curl_cffi, 最快, TLS 指纹伪装)
      ↓ 被封 (403/429)?
   2. BrowserFetcher (Playwright, JS 渲染)
      ↓ 被封?
-  3. StealthFetcher (Scrapling, 最强反检测)
+  3. CamoufoxFetcher (Firefox 反检测, 绕过 JS 环境检测) ← 51job 等强反爬
+     ↓ 被封?
+  4. StealthFetcher (Scrapling, Cloudflare Turnstile)
      ↓ 还是失败?
-  4. 轮换 TLS 指纹 + 代理, 重试 (最多 max_retries 次)
+  5. 轮换 TLS 指纹 + 代理, 重试 (最多 max_retries 次)
 ```
 
 ---
@@ -556,6 +583,7 @@ omnicrawl/
 |----|------|------|
 | `curl_cffi` | >= 0.15 | TLS 指纹伪装（核心，37+ 浏览器指纹） |
 | `scrapling` | >= 0.3 | 反反爬框架（Cloudflare 绕过、浏览器指纹防护） |
+| `camoufox` | >= 0.4 | Firefox 反检测浏览器（51job、阿里云 WAF JS 环境检测） |
 | `playwright` | >= 1.40 | 浏览器自动化（JS 渲染） |
 | `patchright` | >= 1.40 | Scrapling 的隐身浏览器引擎 |
 | `selectolax` | >= 0.3 | 高性能 HTML 解析 |
@@ -572,9 +600,13 @@ omnicrawl/
 
 `requests` 使用 Python 标准库的 TLS 实现，其 JA3 指纹与真实浏览器完全不同，会被 WAF 立即识别。`curl_cffi` 底层使用修改版的 libcurl，可以精确模拟 Chrome/Safari/Firefox 的 TLS 握手行为。
 
+### Q: 什么时候用 Camoufox 模式？
+
+当目标站点**检测浏览器 JS 环境**（如 51job）时。这些站点不仅检查 TLS 指纹，还会检查 `navigator.webdriver`、Canvas/WebGL 指纹等。Camoufox 是 Firefox 的原生修改版，指纹注入在引擎内部完成，检测不到自动化。
+
 ### Q: 什么时候用 Stealth 模式？
 
-只有在目标站点**强制要求 JS 执行**（返回空白页面或 JS 挑战页）时。大部分 WAF 检测在 TLS 握手阶段完成，curl_cffi 就够了。
+当目标站点使用 **Cloudflare Turnstile** 验证时。Scrapling 的 StealthyFetcher 内置 Turnstile 解决方案。
 
 ### Q: 代理从哪来？
 
