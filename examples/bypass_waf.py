@@ -5,17 +5,16 @@ from omnicrawl import OmniClient, FetchMode
 
 
 async def bypass_aliyun_waf():
-    """绕过阿里云 WAF 示例"""
-    print("=== 阿里云 WAF 绕过 ===")
+    """绕过阿里云 WAF 示例（JS 环境检测场景，如 51job）"""
+    print("=== 阿里云 WAF 绕过（Camoufox）===")
 
     async with OmniClient(
-        mode=FetchMode.STEALTH,       # 使用最强反检测模式
+        mode=FetchMode.CAMOUFOX,      # Camoufox 反检测浏览器，绕过 JS 环境检测
         waf="aliyun_waf",             # 启用阿里云 WAF 策略
-        fingerprint="chrome136",      # TLS 指纹
-        # proxy_pool=["http://user:pass@proxy1:port"],  # 住宅代理
+        # proxy_pool=["http://user:pass@residential:port"],  # 住宅代理
         min_delay=3.0,                # 最小延时 3 秒
     ) as client:
-        result = await client.get("https://target-site.com")
+        result = await client.get("https://51job.com")
         print(f"状态: {result.status_code}")
         print(f"被拦截: {result.blocked}")
         print(f"耗时: {result.elapsed:.2f}s")
@@ -36,11 +35,11 @@ async def bypass_cloudflare():
 
 
 async def auto_fallback():
-    """自动降级示例 — 从 HTTP 到 Browser 到 Stealth"""
+    """自动降级示例 — HTTP → Browser → Camoufox → Stealth"""
     print("\n=== 自动降级 ===")
 
     async with OmniClient(
-        mode=FetchMode.AUTO,  # 自动选择最佳模式
+        mode=FetchMode.AUTO,  # 自动选择最佳模式，被封时自动降级
         max_retries=3,
     ) as client:
         result = await client.get("https://target-site.com")

@@ -20,10 +20,6 @@ class CamoufoxFetcher(BaseFetcher):
     - GeoIP 自动匹配代理地理位置
     - 绕过 CreepJS、Cloudflare Turnstile 等强反爬
 
-    与 StealthyFetcher 的区别：
-    - StealthyFetcher 基于 Chromium + Playwright，自动化痕迹明显
-    - CamoufoxFetcher 基于 Firefox 原生修改，检测不到自动化
-
     用法:
         async with CamoufoxFetcher() as fetcher:
             result = await fetcher.fetch("https://51job.com")
@@ -38,7 +34,8 @@ class CamoufoxFetcher(BaseFetcher):
         block_webrtc: bool = True,
         block_images: bool = False,
         locale: str = "zh-CN",
-        os: Optional[str] = None,  # "windows" / "macos" / "linux" / None=随机
+        os: Optional[str] = None,
+        geoip: bool = True,
     ):
         self._headless = headless
         self._humanize = humanize
@@ -46,13 +43,31 @@ class CamoufoxFetcher(BaseFetcher):
         self._block_images = block_images
         self._locale = locale
         self._os = os
+        self._geoip = geoip
+        self._camoufox_class = None
         self._browser = None
-        self._playwright = None
 
-    async def _ensure_browser(self):
-        if self._browser is None:
+    async def _ensure_import(self):
+        """延迟导入 Camoufox"""
+        if self._camoufox_class is None:
             from camoufox.async_api import AsyncCamoufox
             self._camoufox_class = AsyncCamoufox
+
+    def _build_kwargs(self, proxy: Optional[str] = None) -> dict:
+        """构建 Camoufox 启动参数"""
+        kwargs = {
+            "headless": self._headless,
+            "humanize": self._humanize,
+            "block_webrtc": self._block_webrtc,
+            "block_images": self._block_images,
+            "locale": self._locale,
+            "geoip": self._geoip,
+        }
+        if self._os:
+            kwargs["os"] = self._os
+        if proxy:
+            kwargs["proxy"] = {"server": proxy}
+        return kwargs
 
     async def fetch(
         self,
@@ -65,21 +80,10 @@ class CamoufoxFetcher(BaseFetcher):
         wait_for: Optional[str] = None,
         **kwargs,
     ) -> FetchResult:
-        await self._ensure_browser()
+        await self._ensure_import()
         start = time.time()
 
-        camoufox_kwargs = {
-            "headless": self._headless,
-            "humanize": self._humanize,
-            "block_webrtc": self._block_webrtc,
-            "block_images": self._block_images,
-            "locale": self._locale,
-            "geoip": True,  # 自动匹配代理地理位置
-        }
-        if self._os:
-            camoufox_kwargs["os"] = self._os
-        if proxy:
-            camoufox_kwargs["proxy"] = {"server": proxy}
+        camoufox_kwargs = self._build_kwargs(proxy)
 
         try:
             async with self._camoufox_class(**camoufox_kwargs) as browser:
@@ -88,16 +92,15 @@ class CamoufoxFetcher(BaseFetcher):
                 if headers:
                     await page.set_extra_http_headers(headers)
 
-                resp = await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
+                resp = await page.goto(url, wait_until="domcontentloaded", timeout=int(timeout * 1000))
 
                 if wait_for:
-                    await page.wait_for_selector(wait_for, timeout=timeout * 1000)
+                    await page.wait_for_selector(wait_for, timeout=int(timeout * 1000))
                 else:
-                    # 等待网络空闲，确保 JS 执行完成
                     try:
-                        await page.wait_for_load_state("networkidle", timeout=10000)
+                        await page.wait_for_load_state("networkidle", timeout=min(int(timeout * 1000), 10000))
                     except Exception:
-                        pass  # 超时不报错
+                        pass
 
                 html = await page.content()
                 elapsed = time.time() - start
@@ -123,7 +126,7 @@ class CamoufoxFetcher(BaseFetcher):
             raise
 
     async def close(self):
-        pass  # Camoufox 使用 async with 自动管理
+        pass  # Camoufox 使用 async with 自动管理浏览器生命周期
 
     async def __aexit__(self, *args):
         await self.close()

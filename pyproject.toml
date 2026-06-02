@@ -22,6 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+camoufox = ["camoufox>=0.4"]
 dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
 
 [project.scripts]

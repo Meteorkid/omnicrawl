@@ -9,7 +9,7 @@ class TestWAFBypass:
     def test_aliyun_waf_profile(self):
         bypass = WAFBypass("aliyun_waf")
         assert bypass.profile.name == "阿里云 WAF"
-        assert bypass.get_recommended_mode() == FetchMode.STEALTH
+        assert bypass.get_recommended_mode() == FetchMode.CAMOUFOX
         assert bypass.get_min_delay() == 3.0
 
     def test_cloudflare_profile(self):

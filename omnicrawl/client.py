@@ -136,8 +136,11 @@ class OmniClient:
             FetchResult 包含 HTML、Markdown、状态等
         """
         target_mode = mode or self._mode
-        if target_mode == FetchMode.AUTO:
-            target_mode = FetchMode.HTTP  # AUTO 模式从最快的开始
+        if target_mode == FetchMode.AUTO and self._waf:
+            # 有 WAF 配置时，使用推荐模式
+            target_mode = self._waf.get_recommended_mode()
+        elif target_mode == FetchMode.AUTO:
+            target_mode = FetchMode.HTTP  # 默认从最快的开始
 
         proxy = proxy or self._get_proxy()
         await self._rate_limiter.wait(url)

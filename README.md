@@ -81,12 +81,16 @@ cd omnicrawl
 python3.12 -m venv .venv
 source .venv/bin/activate
 
-# 安装
+# 安装（基础版，包含 curl_cffi + Scrapling）
 pip install -e .
 
-# 安装浏览器（Stealth/Browser 模式需要）
+# 安装浏览器（Browser/Stealth 模式需要）
 playwright install chromium
 patchright install chromium
+
+# 安装 Camoufox（51job 等强反爬站点需要）
+pip install -e ".[camoufox]"
+camoufox fetch
 ```
 
 ### 环境要求
@@ -142,7 +146,11 @@ async with OmniClient(mode=FetchMode.HTTP) as client:
 async with OmniClient(mode=FetchMode.BROWSER) as client:
     result = await client.get("https://spa-site.com")
 
-# Stealth 模式（最强反检测）
+# Camoufox 模式（反检测浏览器，绕过 JS 环境检测）
+async with OmniClient(mode=FetchMode.CAMOUFOX) as client:
+    result = await client.get("https://51job.com")
+
+# Stealth 模式（Cloudflare Turnstile 绕过）
 async with OmniClient(mode=FetchMode.STEALTH) as client:
     result = await client.get("https://cloudflare-site.com")
 
@@ -549,7 +557,8 @@ omnicrawl/
 │   │   ├── base.py             # 基类 (FetchMode, FetchResult)
 │   │   ├── http_fetcher.py     # curl_cffi (最快)
 │   │   ├── browser_fetcher.py  # Playwright (JS 渲染)
-│   │   └── stealth_fetcher.py  # Scrapling (最强反检测)
+│   │   ├── camoufox_fetcher.py # Camoufox (反检测浏览器)
+│   │   └── stealth_fetcher.py  # Scrapling (Cloudflare 绕过)
 │   ├── fingerprint/            # 指纹管理
 │   │   └── tls.py              # TLS 指纹 (37+ 浏览器)
 │   ├── proxy/                  # 代理管理
