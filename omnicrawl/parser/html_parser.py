@@ -53,14 +53,19 @@ class HTMLParser:
         return results
 
     def xpath_first(self, xpath: str) -> Optional[str]:
-        """XPath 获取第一个匹配（简化实现，支持基本 XPath）"""
-        # selectolax 不支持 XPath，使用正则转换为 CSS
-        # 支持常见的 //tag[@attr="value"] 模式
+        """XPath 获取第一个匹配（仅支持基本模式）
+
+        支持: //tag[@attr="value"]
+        不支持时抛出 NotImplementedError。
+        """
         match = re.match(r"//(\w+)\[@(\w+)=[\"']([^\"']+)[\"']\]", xpath)
         if match:
             tag, attr, value = match.groups()
             return self.css_first(f'{tag}[{attr}="{value}"]::text')
-        return None
+        raise NotImplementedError(
+            f"XPath 模式 '{xpath}' 不受支持。仅支持 '//tag[@attr=\"value\"]' 格式。"
+            f"请使用 css_first() 或 css_all() 代替。"
+        )
 
     def text(self) -> str:
         """获取纯文本"""

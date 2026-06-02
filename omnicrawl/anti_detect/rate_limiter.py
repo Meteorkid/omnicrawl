@@ -28,6 +28,7 @@ class RateLimiter:
         max_delay: float = 10.0,
         backoff_factor: float = 2.0,
         cooldown: float = 60.0,
+        max_concurrent: int = 10,
     ):
         self._min_delay = min_delay
         self._max_delay = max_delay
@@ -36,7 +37,7 @@ class RateLimiter:
         self._domain_delays: dict[str, float] = {}
         self._last_request: dict[str, float] = {}
         self._block_count: dict[str, int] = {}
-        self._semaphore = asyncio.Semaphore(10)  # 全局并发限制
+        self._semaphore = asyncio.Semaphore(max_concurrent)
 
     def _get_domain(self, url: str) -> str:
         return urlparse(url).netloc

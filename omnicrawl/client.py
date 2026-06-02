@@ -66,6 +66,7 @@ class OmniClient:
         waf: Optional[str] = None,
         min_delay: float = 1.0,
         max_retries: int = 2,
+        max_concurrent: int = 10,
         auto_fallback: bool = True,
     ):
         self._mode = mode
@@ -85,7 +86,7 @@ class OmniClient:
         self._proxy_rotator = ProxyRotator(proxy_pool) if proxy_pool else None
 
         # 智能限速
-        self._rate_limiter = RateLimiter(min_delay=min_delay)
+        self._rate_limiter = RateLimiter(min_delay=min_delay, max_concurrent=max_concurrent)
 
         # Markdown 转换器
         self._converter = MarkdownConverter()
@@ -113,20 +114,22 @@ class OmniClient:
             return self._proxy_rotator.next()
         return None
 
-    async def get(
+    async def fetch(
         self,
         url: str,
         *,
+        method: str = "GET",
         mode: Optional[FetchMode] = None,
         headers: Optional[dict] = None,
         proxy: Optional[str] = None,
         timeout: float = 30.0,
         **kwargs,
     ) -> FetchResult:
-        """抓取单个 URL
+        """通用抓取方法（支持 GET/POST 等所有 HTTP 方法）
 
         Args:
             url: 目标 URL
+            method: HTTP 方法（GET/POST/PUT/DELETE 等）
             mode: 指定抓取模式，None 则使用客户端默认模式
             headers: 自定义请求头
             proxy: 指定代理，None 则使用代理轮换器
@@ -170,6 +173,34 @@ class OmniClient:
             self._rate_limiter.report_success(url)
 
         return result
+
+    async def get(
+        self,
+        url: str,
+        *,
+        mode: Optional[FetchMode] = None,
+        headers: Optional[dict] = None,
+        proxy: Optional[str] = None,
+        timeout: float = 30.0,
+        **kwargs,
+    ) -> FetchResult:
+        """GET 请求（fetch 的快捷方式）"""
+        return await self.fetch(url, method="GET", mode=mode, headers=headers, proxy=proxy, timeout=timeout, **kwargs)
+
+    async def post(
+        self,
+        url: str,
+        *,
+        data: Optional[dict] = None,
+        json: Optional[dict] = None,
+        mode: Optional[FetchMode] = None,
+        headers: Optional[dict] = None,
+        proxy: Optional[str] = None,
+        timeout: float = 30.0,
+        **kwargs,
+    ) -> FetchResult:
+        """POST 请求（fetch 的快捷方式）"""
+        return await self.fetch(url, method="POST", mode=mode, headers=headers, proxy=proxy, timeout=timeout, data=data, json=json, **kwargs)
 
     async def _fetch_with_retry(
         self,
@@ -233,29 +264,48 @@ class OmniClient:
         concurrency: int = 5,
         **kwargs,
     ) -> list[FetchResult]:
-        """批量抓取
+        """批量抓取（忽略失败的 URL）
 
         Args:
             urls: URL 列表
             concurrency: 并发数
 
         Returns:
-            成功的 FetchResult 列表（失败的 URL 会被记录日志）
+            成功的 FetchResult 列表
+        """
+        results, _ = await self.batch_with_errors(urls, concurrency=concurrency, **kwargs)
+        return results
+
+    async def batch_with_errors(
+        self,
+        urls: list[str],
+        concurrency: int = 5,
+        **kwargs,
+    ) -> tuple[list[FetchResult], list[tuple[str, Exception]]]:
+        """批量抓取（返回失败详情）
+
+        Args:
+            urls: URL 列表
+            concurrency: 并发数
+
+        Returns:
+            (成功列表, 失败列表) — 失败列表元素为 (url, exception) 元组
         """
         semaphore = asyncio.Semaphore(concurrency)
+        successes: list[FetchResult] = []
+        errors: list[tuple[str, Exception]] = []
 
-        async def fetch_one(url: str) -> Optional[FetchResult]:
+        async def fetch_one(url: str):
             async with semaphore:
                 try:
-                    return await self.get(url, **kwargs)
+                    result = await self.get(url, **kwargs)
+                    successes.append(result)
                 except Exception as e:
                     logger.error(f"批量抓取失败: {url} - {e}")
-                    return None
+                    errors.append((url, e))
 
-        tasks = [fetch_one(url) for url in urls]
-        results = await asyncio.gather(*tasks)
-
-        return [r for r in results if r is not None]
+        await asyncio.gather(*[fetch_one(url) for url in urls])
+        return successes, errors
 
     async def close(self):
         """关闭所有抓取器"""
