@@ -83,6 +83,62 @@ class TestOmniClientFetch:
             assert "Example Domain" in result.text
 
 
+class TestOmniClientMethods:
+    @pytest.mark.asyncio
+    async def test_fetch_get(self):
+        """fetch() 支持 GET"""
+        async with OmniClient(mode=FetchMode.HTTP) as client:
+            result = await client.fetch("https://httpbin.org/get")
+            assert result.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_fetch_post(self):
+        """fetch() 支持 POST"""
+        async with OmniClient(mode=FetchMode.HTTP) as client:
+            result = await client.fetch("https://httpbin.org/post", method="POST", json={"key": "value"})
+            assert result.status_code == 200
+            assert "key" in result.html
+
+    @pytest.mark.asyncio
+    async def test_post_method(self):
+        """post() 快捷方法"""
+        async with OmniClient(mode=FetchMode.HTTP) as client:
+            result = await client.post("https://httpbin.org/post", json={"test": 123})
+            assert result.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_batch_with_errors(self):
+        """batch_with_errors() 返回成功和失败详情"""
+        async with OmniClient(mode=FetchMode.HTTP) as client:
+            successes, errors = await client.batch_with_errors(
+                ["https://example.com", "https://invalid-domain-xyz.com"],
+                concurrency=2,
+            )
+            assert len(successes) >= 1
+            assert len(errors) >= 1
+            # 错误格式为 (url, exception)
+            url, exc = errors[0]
+            assert isinstance(url, str)
+            assert isinstance(exc, Exception)
+
+    @pytest.mark.asyncio
+    async def test_batch_with_errors_all_success(self):
+        """batch_with_errors() 全部成功时 errors 为空"""
+        async with OmniClient(mode=FetchMode.HTTP) as client:
+            successes, errors = await client.batch_with_errors(
+                ["https://example.com", "https://example.com"],
+                concurrency=2,
+            )
+            assert len(successes) == 2
+            assert len(errors) == 0
+
+    @pytest.mark.asyncio
+    async def test_max_concurrent(self):
+        """max_concurrent 参数生效"""
+        async with OmniClient(mode=FetchMode.HTTP, max_concurrent=5) as client:
+            assert client._rate_limiter._semaphore._value == 5
+
+
 class TestFetchResult:
     def test_ok_true(self):
         r = FetchResult(url="http://x", status_code=200, html="", headers={}, cookies={}, mode_used=FetchMode.HTTP, elapsed=0.1)

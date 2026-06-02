@@ -72,10 +72,10 @@ class BrowserFetcher(BaseFetcher):
         context = await self._browser.new_context(**context_kwargs)
         try:
             page = await context.new_page()
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=timeout * 1000)
+            resp = await page.goto(url, wait_until="domcontentloaded", timeout=int(timeout * 1000))
 
             if wait_for:
-                await page.wait_for_selector(wait_for, timeout=timeout * 1000)
+                await page.wait_for_selector(wait_for, timeout=int(timeout * 1000))
 
             html = await page.content()
             elapsed = time.time() - start

@@ -45,7 +45,7 @@ class CamoufoxFetcher(BaseFetcher):
         self._os = os
         self._geoip = geoip
         self._camoufox_class = None
-        self._context_manager = None  # async with 上下文管理器
+        self._context_manager = None
         self._browser = None
 
     async def _ensure_browser(self):
@@ -68,10 +68,14 @@ class CamoufoxFetcher(BaseFetcher):
         if self._os:
             kwargs["os"] = self._os
 
-        # 进入 async with 上下文，但不退出（在 close 时退出）
         self._context_manager = self._camoufox_class(**kwargs)
-        self._browser = await self._context_manager.__aenter__()
-        logger.info("Camoufox 浏览器已启动")
+        try:
+            self._browser = await self._context_manager.__aenter__()
+            logger.info("Camoufox 浏览器已启动")
+        except Exception:
+            # __aenter__ 失败时清理 _context_manager
+            self._context_manager = None
+            raise
 
     async def fetch(
         self,
@@ -86,6 +90,7 @@ class CamoufoxFetcher(BaseFetcher):
     ) -> FetchResult:
         await self._ensure_browser()
         start = time.time()
+        page = None
 
         try:
             page = await self._browser.new_page()
@@ -112,9 +117,6 @@ class CamoufoxFetcher(BaseFetcher):
             cookies = {c["name"]: c["value"] for c in cookies_list}
             blocked = status in (403, 429)
 
-            # 关闭页面（不是浏览器）
-            await page.close()
-
             return FetchResult(
                 url=resp.url if resp else url,
                 status_code=status,
@@ -128,14 +130,20 @@ class CamoufoxFetcher(BaseFetcher):
         except Exception as e:
             logger.error(f"Camoufox 请求失败: {url} - {e}")
             raise
+        finally:
+            if page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass  # 页面关闭失败不影响主流程
 
     async def close(self):
         """关闭浏览器实例"""
-        if self._context_manager and self._browser:
+        if self._context_manager:
             try:
                 await self._context_manager.__aexit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Camoufox 浏览器关闭异常: {e}")
             self._browser = None
             self._context_manager = None
             logger.info("Camoufox 浏览器已关闭")

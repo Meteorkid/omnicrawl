@@ -150,6 +150,7 @@ class OmniClient:
 
         result = await self._fetch_with_retry(
             url,
+            method=method,
             mode=target_mode,
             headers=headers,
             proxy=proxy,
