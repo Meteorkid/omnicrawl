@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/pytest*)",
+      "Bash(.venv/bin/pip install*)",
+      "Bash(.venv/bin/python*)",
+      "Bash(git *)",
+      "Bash(gh *)"
+    ],
+    "deny": []
+  }
+}
