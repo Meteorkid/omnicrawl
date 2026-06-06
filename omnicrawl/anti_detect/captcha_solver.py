@@ -725,6 +725,12 @@ class CaptchaSolver:
             return False
 
         input_selectors = [
+            "input[name*='captcha']:visible",
+            "input[id*='captcha']:visible",
+            "input[placeholder*='验证码']:visible",
+            "input[placeholder*='captcha']:visible",
+            ".captcha-input input:visible",
+            # 回退：无 :visible 伪类时仍可匹配
             "input[name*='captcha']",
             "input[id*='captcha']",
             "input[placeholder*='验证码']",
@@ -732,9 +738,16 @@ class CaptchaSolver:
             ".captcha-input input",
         ]
         for selector in input_selectors:
-            element = await page.query_selector(selector)
-            if element:
-                await element.fill(text)
-                logger.info(f"已填入验证码文字: {text}")
-                return True
+            try:
+                element = await page.query_selector(selector)
+                if element:
+                    # 二次校验：确保元素可见且未禁用
+                    is_visible = await element.is_visible()
+                    if not is_visible:
+                        continue
+                    await element.fill(text)
+                    logger.info(f"已填入验证码文字: {text}")
+                    return True
+            except Exception:
+                continue
         return False

@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page as PlaywrightPage
 
 from omnicrawl.fetchers.base import FetchMode, FetchResult
 from omnicrawl.fetchers.http_fetcher import HttpFetcher
@@ -308,8 +311,11 @@ class OmniClient:
     # 验证码解决
     # ------------------------------------------------------------------
 
-    async def solve_captcha(self, page) -> bool:
+    async def solve_captcha(self, page: PlaywrightPage) -> bool:
         """在页面上检测并解决验证码（需要 captcha_api_key）
+
+        Args:
+            page: Playwright Page 对象
 
         Returns:
             True 表示已解决，False 表示需要人工介入
@@ -420,6 +426,10 @@ class OmniClient:
 
         Returns:
             (成功列表, 失败列表) — 失败列表元素为 (url, exception) 元组
+
+        Note:
+            successes 和 errors 列表在 asyncio 单线程中使用，
+            append 操作是原子的，无需加锁。若改为多线程并发则需加锁。
         """
         semaphore = asyncio.Semaphore(concurrency)
         successes: list[FetchResult] = []

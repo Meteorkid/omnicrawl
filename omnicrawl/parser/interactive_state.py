@@ -213,13 +213,15 @@ class InteractiveStateExtractor:
         if attrs.get("aria-hidden", "").lower() == "true":
             return False
 
-        # style 属性中的 display:none / visibility:hidden
+        # style 属性中的 display:none / visibility:hidden / opacity:0
         style = attrs.get("style", "")
         if style:
             style_lower = style.lower().replace(" ", "")
             if "display:none" in style_lower or "display: none" in style_lower:
                 return False
             if "visibility:hidden" in style_lower or "visibility: hidden" in style_lower:
+                return False
+            if "opacity:0" in style_lower or "opacity: 0" in style_lower:
                 return False
 
         # input type="hidden"
@@ -252,6 +254,7 @@ class InteractiveStateExtractor:
             parts.append(f"text={direct_text.strip()}")
 
         raw = "|".join(parts)
+        # MD5 仅用于轻量指纹（非安全场景），12 位 hex 足够区分元素
         return hashlib.md5(raw.encode()).hexdigest()[:12]
 
     def _get_direct_text(self, node: Node) -> str:

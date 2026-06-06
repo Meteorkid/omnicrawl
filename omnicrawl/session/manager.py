@@ -120,6 +120,13 @@ class SessionManager:
 
             browser = self._browsers[browser_name]
 
+            # HTTP 模式下不支持 session（无浏览器实例）
+            if browser.mode == FetchMode.HTTP:
+                raise ValueError(
+                    f"浏览器 '{browser_name}' 使用 HTTP 模式，不支持 session。"
+                    f"请使用 FetchMode.BROWSER / CAMOUFOX / STEALTH 模式"
+                )
+
             if session_name is None:
                 session_name = f"{browser_name}_{uuid.uuid4().hex[:8]}"
             elif session_name in browser._sessions:
@@ -188,14 +195,28 @@ class SessionManager:
             logger.info(f"关闭浏览器: {browser_name} (含 {len(browser._sessions)} 个 session)")
 
     def find_browser(self, task_desc: str) -> Optional[BrowserHandle]:
-        """按 desc 语义匹配浏览器（简单子串匹配）"""
+        """按 desc 语义匹配浏览器
+
+        匹配策略：
+        1. 优先精确子串匹配
+        2. 回退到分词匹配（按空格分割 task_desc，统计命中的词数）
+        """
         task_lower = task_desc.lower()
         best_match: Optional[BrowserHandle] = None
         best_score = -1
 
         for browser in self._browsers.values():
             desc_lower = browser.desc.lower()
-            # 计算匹配度：被匹配的子串数量
+
+            # 精确子串匹配：直接包含则高分
+            if task_lower in desc_lower:
+                score = 1000  # 精确匹配权重远高于分词
+                if score > best_score:
+                    best_score = score
+                    best_match = browser
+                continue
+
+            # 分词匹配：按空格分割，统计命中的词数
             words = task_lower.split()
             score = sum(1 for word in words if word in desc_lower)
             if score > best_score:

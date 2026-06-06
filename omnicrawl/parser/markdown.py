@@ -292,13 +292,20 @@ class MarkdownConverter:
 
     @staticmethod
     def token_count(text: str, model: str = "gpt-4o") -> int:
-        """计算 Token 数量"""
+        """计算 Token 数量
+
+        优先使用 tiktoken 精确计算，不可用时回退到估算：
+        - CJK 字符：约 1.5 token/字（GPT-4o 对中文更高效）
+        - 英文单词：约 1.3 token/词
+        - 标点/空格/数字：按字符粗算 0.3 token/字符
+        """
         try:
             import tiktoken
             enc = tiktoken.encoding_for_model(model)
             return len(enc.encode(text))
         except (ImportError, Exception):
-            # 粗略估算：1 中文字 ≈ 2 token，1 英文词 ≈ 1.3 token
-            cn_chars = len(re.findall(r"[一-鿿]", text))
+            # 改进估算：分别计算 CJK、英文、其他字符
+            cn_chars = len(re.findall(r"[一-鿿㐀-䶿]", text))
             en_words = len(re.findall(r"[a-zA-Z]+", text))
-            return cn_chars * 2 + int(en_words * 1.3)
+            other_chars = len(text) - cn_chars - sum(len(w) for w in re.findall(r"[a-zA-Z]+", text))
+            return int(cn_chars * 1.5 + en_words * 1.3 + other_chars * 0.3)

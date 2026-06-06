@@ -541,3 +541,36 @@ class FingerprintConsistency:
     def get_canvas_noise_seed(self, identity: BrowserIdentity) -> int:
         """获取当前身份的 Canvas 噪声种子"""
         return identity.canvas_noise_seed
+
+    def update_versions(self, version_map: dict[str, str]) -> None:
+        """批量更新预定义身份的浏览器版本号
+
+        当 Chrome 发布新版本后，调用此方法更新所有身份的版本号和 UA，
+        保持指纹新鲜度。
+
+        Args:
+            version_map: {身份名: 新版本号}，如 {"chrome_macos_m1": "143"}
+
+        示例::
+
+            fc.update_versions({
+                "chrome_macos_m1": "143",
+                "chrome_windows": "143",
+            })
+        """
+        for name, version in version_map.items():
+            if name not in self._identities:
+                logger.warning("update_versions: 未知身份 '%s'，跳过", name)
+                continue
+            ident = self._identities[name]
+            old_version = ident.chrome_version
+            ident.chrome_version = version
+            # 更新 UA 中的版本号
+            if ident.user_agent and old_version != "0":
+                ident.user_agent = ident.user_agent.replace(
+                    f"Chrome/{old_version}.", f"Chrome/{version}."
+                )
+            logger.info(
+                "更新身份 '%s' 版本: %s → %s",
+                name, old_version, version,
+            )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Optional
 from omnicrawl.fetchers.base import BaseFetcher, FetchMode, FetchResult
@@ -45,21 +46,23 @@ class StealthFetcher(BaseFetcher):
         self._real_chrome = real_chrome
         self._identity = identity
         self._fetcher = None
+        self._init_lock = asyncio.Lock()
 
-    def _ensure_fetcher(self):
-        if self._fetcher is None:
-            from scrapling.fetchers import StealthyFetcher
-            self._fetcher = StealthyFetcher
+    async def _ensure_fetcher(self):
+        async with self._init_lock:
+            if self._fetcher is None:
+                from scrapling.fetchers import StealthyFetcher
+                self._fetcher = StealthyFetcher
 
-        # 指纹一致性：如果没有指定身份，自动选一个
-        if self._identity is None:
-            try:
-                from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
-                fc = FingerprintConsistency()
-                self._identity = fc.random_identity()
-                logger.info("自动选择指纹身份: %s (%s)", self._identity.os, self._identity.browser_name)
-            except Exception as e:
-                logger.debug("指纹一致性模块不可用，跳过: %s", e)
+            # 指纹一致性：如果没有指定身份，自动选一个
+            if self._identity is None:
+                try:
+                    from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
+                    fc = FingerprintConsistency()
+                    self._identity = fc.random_identity()
+                    logger.info("自动选择指纹身份: %s (%s)", self._identity.os, self._identity.browser_name)
+                except Exception as e:
+                    logger.debug("指纹一致性模块不可用，跳过: %s", e)
 
     async def fetch(
         self,
@@ -73,7 +76,7 @@ class StealthFetcher(BaseFetcher):
         wait_for: Optional[str] = None,
         **kwargs,
     ) -> FetchResult:
-        self._ensure_fetcher()
+        await self._ensure_fetcher()
         start = time.time()
 
         # 合并身份 UA 到 headers

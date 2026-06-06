@@ -6,7 +6,10 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from omnicrawl.parser.interactive_state import PageState
 
 
 class FetchMode(Enum):
@@ -32,7 +35,7 @@ class FetchResult:
     markdown: str = ""    # LLM 友好的 Markdown
     text: str = ""        # 纯文本
     _content: Optional[bytes] = field(default=None, repr=False)
-    _interactive_state: Optional[object] = field(default=None, repr=False)
+    _interactive_state: Optional[PageState] = field(default=None, repr=False)
 
     @property
     def ok(self) -> bool:

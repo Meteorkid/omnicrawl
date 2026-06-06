@@ -10,52 +10,50 @@
     print(response.markdown)
 """
 
-from omnicrawl.client import OmniClient
-from omnicrawl.fetchers.base import FetchMode, FetchResult
-from omnicrawl.proxy.rotator import ProxyRotator
-from omnicrawl.proxy.validator import ProxyValidator
-from omnicrawl.fingerprint.tls import TLSFingerprint
-from omnicrawl.anti_detect.waf_bypass import WAFBypass
-from omnicrawl.anti_detect.rate_limiter import RateLimiter
-from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency, BrowserIdentity
-from omnicrawl.anti_detect.captcha_solver import CaptchaSolver, CaptchaDetector, CaptchaType
-from omnicrawl.session.manager import SessionManager, BrowserHandle, Session
-from omnicrawl.parser.html_parser import HTMLParser
-from omnicrawl.parser.markdown import MarkdownConverter
-from omnicrawl.parser.interactive_state import InteractiveStateExtractor, PageState, InteractiveElement
-from omnicrawl.spider.smart_spider import SmartSpider, ApiEndpoint, NetworkCapture
-
 __version__ = "0.2.0"
-__all__ = [
+
+# 延迟导入：首次访问时才 import，避免顶层加载全部模块
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # Core
-    "OmniClient",
-    "FetchMode",
-    "FetchResult",
+    "OmniClient": ("omnicrawl.client", "OmniClient"),
+    "FetchMode": ("omnicrawl.fetchers.base", "FetchMode"),
+    "FetchResult": ("omnicrawl.fetchers.base", "FetchResult"),
     # Proxy
-    "ProxyRotator",
-    "ProxyValidator",
+    "ProxyRotator": ("omnicrawl.proxy.rotator", "ProxyRotator"),
+    "ProxyValidator": ("omnicrawl.proxy.validator", "ProxyValidator"),
     # Fingerprint
-    "TLSFingerprint",
-    "FingerprintConsistency",
-    "BrowserIdentity",
+    "TLSFingerprint": ("omnicrawl.fingerprint.tls", "TLSFingerprint"),
+    "FingerprintConsistency": ("omnicrawl.anti_detect.fingerprint_consistency", "FingerprintConsistency"),
+    "BrowserIdentity": ("omnicrawl.anti_detect.fingerprint_consistency", "BrowserIdentity"),
     # Anti-detect
-    "WAFBypass",
-    "RateLimiter",
-    "CaptchaSolver",
-    "CaptchaDetector",
-    "CaptchaType",
+    "WAFBypass": ("omnicrawl.anti_detect.waf_bypass", "WAFBypass"),
+    "RateLimiter": ("omnicrawl.anti_detect.rate_limiter", "RateLimiter"),
+    "CaptchaSolver": ("omnicrawl.anti_detect.captcha_solver", "CaptchaSolver"),
+    "CaptchaDetector": ("omnicrawl.anti_detect.captcha_solver", "CaptchaDetector"),
+    "CaptchaType": ("omnicrawl.anti_detect.captcha_solver", "CaptchaType"),
     # Session
-    "SessionManager",
-    "BrowserHandle",
-    "Session",
+    "SessionManager": ("omnicrawl.session.manager", "SessionManager"),
+    "BrowserHandle": ("omnicrawl.session.manager", "BrowserHandle"),
+    "Session": ("omnicrawl.session.manager", "Session"),
     # Parser
-    "HTMLParser",
-    "MarkdownConverter",
-    "InteractiveStateExtractor",
-    "PageState",
-    "InteractiveElement",
+    "HTMLParser": ("omnicrawl.parser.html_parser", "HTMLParser"),
+    "MarkdownConverter": ("omnicrawl.parser.markdown", "MarkdownConverter"),
+    "InteractiveStateExtractor": ("omnicrawl.parser.interactive_state", "InteractiveStateExtractor"),
+    "PageState": ("omnicrawl.parser.interactive_state", "PageState"),
+    "InteractiveElement": ("omnicrawl.parser.interactive_state", "InteractiveElement"),
     # Spider
-    "SmartSpider",
-    "ApiEndpoint",
-    "NetworkCapture",
-]
+    "SmartSpider": ("omnicrawl.spider.smart_spider", "SmartSpider"),
+    "ApiEndpoint": ("omnicrawl.spider.smart_spider", "ApiEndpoint"),
+    "NetworkCapture": ("omnicrawl.spider.smart_spider", "NetworkCapture"),
+}
+
+__all__ = list(_LAZY_IMPORTS.keys())
+
+
+def __getattr__(name: str):
+    if name in _LAZY_IMPORTS:
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, attr_name)
+    raise AttributeError(f"module 'omnicrawl' has no attribute {name!r}")

@@ -297,8 +297,14 @@ class SmartSpider(Spider):
     # API 发现配置
     discovery_enabled: bool = True
     discovery_actions: list[dict] = field(default_factory=list)
-    api_timeout: float = 10.0
+    page_timeout: float = 30.0      # 页面加载超时（秒），用于 goto 等导航操作
+    api_request_timeout: float = 10.0  # API 请求超时（秒），用于直接调用 API
     max_capture_time: float = 15.0  # 最大捕获时间（秒）
+
+    @property
+    def api_timeout(self) -> float:
+        """向后兼容：api_timeout 现在映射到 api_request_timeout"""
+        return self.api_request_timeout
 
     def __init__(self):
         super().__init__()
@@ -323,7 +329,7 @@ class SmartSpider(Spider):
 
         try:
             await self._network_capture.start_capture(page)
-            await page.goto(url, wait_until="domcontentloaded", timeout=int(self.api_timeout * 1000))
+            await page.goto(url, wait_until="domcontentloaded", timeout=int(self.page_timeout * 1000))
 
             # 执行发现操作
             for action in self.discovery_actions:
@@ -441,7 +447,7 @@ class SmartSpider(Spider):
         try:
             kwargs: dict = {
                 "method": endpoint.method,
-                "timeout": self.api_timeout,
+                "timeout": self.api_request_timeout,
             }
             if endpoint.headers:
                 kwargs["headers"] = endpoint.headers

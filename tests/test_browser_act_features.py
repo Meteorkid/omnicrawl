@@ -188,7 +188,7 @@ class TestSessionManager:
     @pytest.mark.asyncio
     async def test_open_and_close_session(self, manager):
         from omnicrawl.fetchers.base import FetchMode
-        await manager.create_browser("main", mode=FetchMode.HTTP)
+        await manager.create_browser("main", mode=FetchMode.BROWSER)
         session = await manager.open_session("main", "search")
         assert session.name == "search"
         sessions = manager.list_sessions()
@@ -197,6 +197,13 @@ class TestSessionManager:
         await manager.close_session("search")
         sessions = manager.list_sessions()
         assert len(sessions) == 0
+
+    @pytest.mark.asyncio
+    async def test_open_session_on_http_browser_raises(self, manager):
+        from omnicrawl.fetchers.base import FetchMode
+        await manager.create_browser("main", mode=FetchMode.HTTP)
+        with pytest.raises(ValueError, match="HTTP 模式"):
+            await manager.open_session("main", "search")
 
     @pytest.mark.asyncio
     async def test_open_session_on_nonexistent_browser_raises(self, manager):
