@@ -17,19 +17,45 @@ from omnicrawl.proxy.validator import ProxyValidator
 from omnicrawl.fingerprint.tls import TLSFingerprint
 from omnicrawl.anti_detect.waf_bypass import WAFBypass
 from omnicrawl.anti_detect.rate_limiter import RateLimiter
+from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency, BrowserIdentity
+from omnicrawl.anti_detect.captcha_solver import CaptchaSolver, CaptchaDetector, CaptchaType
+from omnicrawl.session.manager import SessionManager, BrowserHandle, Session
 from omnicrawl.parser.html_parser import HTMLParser
 from omnicrawl.parser.markdown import MarkdownConverter
+from omnicrawl.parser.interactive_state import InteractiveStateExtractor, PageState, InteractiveElement
+from omnicrawl.spider.smart_spider import SmartSpider, ApiEndpoint, NetworkCapture
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
+    # Core
     "OmniClient",
     "FetchMode",
     "FetchResult",
+    # Proxy
     "ProxyRotator",
     "ProxyValidator",
+    # Fingerprint
     "TLSFingerprint",
+    "FingerprintConsistency",
+    "BrowserIdentity",
+    # Anti-detect
     "WAFBypass",
     "RateLimiter",
+    "CaptchaSolver",
+    "CaptchaDetector",
+    "CaptchaType",
+    # Session
+    "SessionManager",
+    "BrowserHandle",
+    "Session",
+    # Parser
     "HTMLParser",
     "MarkdownConverter",
+    "InteractiveStateExtractor",
+    "PageState",
+    "InteractiveElement",
+    # Spider
+    "SmartSpider",
+    "ApiEndpoint",
+    "NetworkCapture",
 ]

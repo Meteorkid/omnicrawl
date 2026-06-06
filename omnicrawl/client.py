@@ -19,6 +19,7 @@ from omnicrawl.anti_detect.rate_limiter import RateLimiter
 from omnicrawl.anti_detect.waf_bypass import WAFBypass
 from omnicrawl.parser.markdown import MarkdownConverter
 from omnicrawl.parser.html_parser import HTMLParser
+from omnicrawl.parser.interactive_state import InteractiveStateExtractor
 from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("client")
@@ -36,6 +37,9 @@ class OmniClient:
     - 代理轮换 + 智能限速
     - WAF 绕过策略引擎
     - LLM 友好 Markdown 输出
+    - Session 管理（登录态爬取）
+    - 验证码自动解决
+    - 索引式交互状态提取
 
     用法:
         # 基础用法
@@ -56,6 +60,15 @@ class OmniClient:
 
         # 批量抓取
         results = await client.batch(urls, concurrency=5)
+
+        # 登录态爬取（Session 管理）
+        async with OmniClient(session_manager=True) as client:
+            browser = await client.create_browser("51job", mode=FetchMode.CAMOUFOX)
+            session = await client.open_session("51job", "search")
+            result = await client.get("https://www.51job.com")
+
+        # 带验证码解决
+        client = OmniClient(captcha_api_key="your-key")
     """
 
     def __init__(
@@ -68,6 +81,8 @@ class OmniClient:
         max_retries: int = 2,
         max_concurrent: int = 10,
         auto_fallback: bool = True,
+        session_manager: Optional[object] = None,  # SessionManager 实例或 True 自动创建
+        captcha_api_key: Optional[str] = None,      # 验证码云端 API key
     ):
         self._mode = mode
         self._max_retries = max_retries
@@ -91,8 +106,35 @@ class OmniClient:
         # Markdown 转换器
         self._converter = MarkdownConverter()
 
+        # 索引式交互状态提取器
+        self._state_extractor = InteractiveStateExtractor()
+
+        # Session 管理器
+        self._session_mgr = None
+        if session_manager is True:
+            from omnicrawl.session.manager import SessionManager
+            self._session_mgr = SessionManager()
+        elif session_manager is not None:
+            self._session_mgr = session_manager
+
+        # 验证码解决器
+        self._captcha_solver = None
+        if captcha_api_key:
+            from omnicrawl.anti_detect.captcha_solver import CaptchaSolver
+            self._captcha_solver = CaptchaSolver(cloud_api_key=captcha_api_key)
+
         # 抓取器缓存
         self._fetchers: dict[FetchMode, object] = {}
+
+        # 预选一个指纹身份，供所有 fetcher 复用
+        self._identity = None
+        try:
+            from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
+            fc = FingerprintConsistency()
+            self._identity = fc.random_identity()
+            logger.debug("预选指纹身份: %s (%s)", self._identity.os, self._identity.browser_name)
+        except Exception as e:
+            logger.warning("指纹一致性模块不可用，跳过身份预选: %s", e)
 
     def _get_fetcher(self, mode: FetchMode):
         """获取或创建抓取器"""
@@ -103,9 +145,9 @@ class OmniClient:
             elif mode == FetchMode.BROWSER:
                 self._fetchers[mode] = BrowserFetcher()
             elif mode == FetchMode.CAMOUFOX:
-                self._fetchers[mode] = CamoufoxFetcher()
+                self._fetchers[mode] = CamoufoxFetcher(identity=self._identity)
             elif mode == FetchMode.STEALTH:
-                self._fetchers[mode] = StealthFetcher()
+                self._fetchers[mode] = StealthFetcher(identity=self._identity)
         return self._fetchers[mode]
 
     def _get_proxy(self) -> Optional[str]:
@@ -203,6 +245,85 @@ class OmniClient:
         """POST 请求（fetch 的快捷方式）"""
         return await self.fetch(url, method="POST", mode=mode, headers=headers, proxy=proxy, timeout=timeout, data=data, json=json, **kwargs)
 
+    # ------------------------------------------------------------------
+    # Session 管理（登录态爬取）
+    # ------------------------------------------------------------------
+
+    async def create_browser(
+        self,
+        name: str,
+        mode: FetchMode = FetchMode.CAMOUFOX,
+        desc: str = "",
+        proxy: Optional[str] = None,
+        **kwargs,
+    ):
+        """创建一个持久浏览器身份（需要 session_manager=True）
+
+        Args:
+            name: 浏览器名称
+            mode: 抓取模式
+            desc: 语义描述（用于后续按描述匹配）
+            proxy: 绑定代理
+        """
+        if self._session_mgr is None:
+            raise RuntimeError("Session 管理器未启用，请设置 session_manager=True")
+        return await self._session_mgr.create_browser(name, mode=mode, desc=desc, proxy=proxy, **kwargs)
+
+    async def open_session(self, browser_name: str, session_name: Optional[str] = None):
+        """在浏览器中打开工作区 Session（需要 session_manager=True）"""
+        if self._session_mgr is None:
+            raise RuntimeError("Session 管理器未启用，请设置 session_manager=True")
+        return await self._session_mgr.open_session(browser_name, session_name)
+
+    async def close_session(self, session_name: str):
+        """关闭 Session（cookie 保留到浏览器）"""
+        if self._session_mgr is None:
+            raise RuntimeError("Session 管理器未启用，请设置 session_manager=True")
+        return await self._session_mgr.close_session(session_name)
+
+    def find_browser(self, task_desc: str):
+        """按语义描述匹配浏览器"""
+        if self._session_mgr is None:
+            return None
+        return self._session_mgr.find_browser(task_desc)
+
+    def append_browser_desc(self, browser_name: str, info: str):
+        """追加经验到浏览器描述"""
+        if self._session_mgr is not None:
+            self._session_mgr.append_desc(browser_name, info)
+
+    # ------------------------------------------------------------------
+    # 索引式交互状态
+    # ------------------------------------------------------------------
+
+    def get_interactive_state(self, html: str, url: str = ""):
+        """从 HTML 提取交互状态（索引式，Agent 友好）
+
+        Returns:
+            PageState，调用 .to_state_text() 获取文本
+        """
+        return self._state_extractor.extract(html, url=url)
+
+    # ------------------------------------------------------------------
+    # 验证码解决
+    # ------------------------------------------------------------------
+
+    async def solve_captcha(self, page) -> bool:
+        """在页面上检测并解决验证码（需要 captcha_api_key）
+
+        Returns:
+            True 表示已解决，False 表示需要人工介入
+        """
+        if self._captcha_solver is None:
+            logger.warning("验证码解决器未启用，请设置 captcha_api_key")
+            return False
+        result = await self._captcha_solver.solve_on_page(page)
+        if result.solved:
+            logger.info("验证码已自动解决: %s", result.method)
+        else:
+            logger.warning("验证码未解决: %s", result.error)
+        return result.solved
+
     async def _fetch_with_retry(
         self,
         url: str,
@@ -245,6 +366,14 @@ class OmniClient:
 
                 # 403/429 才认为是 WAF 拦截
                 if result.blocked and result.status_code in (403, 429):
+                    # 尝试验证码解决（仅浏览器模式）
+                    if self._captcha_solver and try_mode in (FetchMode.BROWSER, FetchMode.CAMOUFOX, FetchMode.STEALTH):
+                        # 架构限制：自动降级链中无法获取 page 对象，
+                        # 验证码解决需要在 SessionManager 的 page 上使用
+                        # solve_captcha(page)，此处仅记录拦截事件。
+                        logger.info(f"[{try_mode.value}] 被拦截 (HTTP {result.status_code})，"
+                                    "验证码解决需通过 SessionManager 的 solve_captcha(page) 完成")
+
                     if try_mode != FetchMode.STEALTH:
                         logger.warning(f"[{try_mode.value}] 被拦截 (HTTP {result.status_code})，降级...")
                         self._tls.next()
@@ -309,11 +438,14 @@ class OmniClient:
         return successes, errors
 
     async def close(self):
-        """关闭所有抓取器"""
+        """关闭所有抓取器和 Session 管理器"""
         for fetcher in self._fetchers.values():
             if hasattr(fetcher, "close"):
                 await fetcher.close()
         self._fetchers.clear()
+        if self._session_mgr:
+            await self._session_mgr.close_all()
+            self._session_mgr = None
 
     async def __aenter__(self):
         return self

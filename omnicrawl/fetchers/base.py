@@ -32,10 +32,24 @@ class FetchResult:
     markdown: str = ""    # LLM 友好的 Markdown
     text: str = ""        # 纯文本
     _content: Optional[bytes] = field(default=None, repr=False)
+    _interactive_state: Optional[object] = field(default=None, repr=False)
 
     @property
     def ok(self) -> bool:
         return 200 <= self.status_code < 400 and not self.blocked
+
+    @property
+    def interactive_state(self):
+        """获取索引式交互状态（Agent 友好）
+
+        Returns:
+            PageState，调用 .to_state_text() 获取文本输出
+        """
+        if self._interactive_state is None and self.html:
+            from omnicrawl.parser.interactive_state import InteractiveStateExtractor
+            extractor = InteractiveStateExtractor()
+            self._interactive_state = extractor.extract(self.html, url=self.url)
+        return self._interactive_state
 
     def __repr__(self) -> str:
         return f"<FetchResult {self.status_code} [{self.mode_used.value}] {self.url[:60]}>"

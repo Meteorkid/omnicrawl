@@ -18,6 +18,7 @@ class StealthFetcher(BaseFetcher):
     - Canvas/WebRTC/WebGL 指纹防护
     - Playwright 指纹清除
     - 最强反检测能力
+    - 指纹一致性检查（UA 与身份匹配）
 
     用法:
         async with StealthFetcher() as fetcher:
@@ -34,6 +35,7 @@ class StealthFetcher(BaseFetcher):
         block_ads: bool = True,
         google_search: bool = True,
         real_chrome: bool = False,
+        identity: Optional[object] = None,  # BrowserIdentity
     ):
         self._headless = headless
         self._block_webrtc = block_webrtc
@@ -41,12 +43,23 @@ class StealthFetcher(BaseFetcher):
         self._block_ads = block_ads
         self._google_search = google_search
         self._real_chrome = real_chrome
+        self._identity = identity
         self._fetcher = None
 
     def _ensure_fetcher(self):
         if self._fetcher is None:
             from scrapling.fetchers import StealthyFetcher
             self._fetcher = StealthyFetcher
+
+        # 指纹一致性：如果没有指定身份，自动选一个
+        if self._identity is None:
+            try:
+                from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
+                fc = FingerprintConsistency()
+                self._identity = fc.random_identity()
+                logger.info("自动选择指纹身份: %s (%s)", self._identity.os, self._identity.browser_name)
+            except Exception as e:
+                logger.debug("指纹一致性模块不可用，跳过: %s", e)
 
     async def fetch(
         self,
@@ -63,6 +76,11 @@ class StealthFetcher(BaseFetcher):
         self._ensure_fetcher()
         start = time.time()
 
+        # 合并身份 UA 到 headers
+        effective_headers = dict(headers) if headers else {}
+        if self._identity and self._identity.user_agent:
+            effective_headers.setdefault("User-Agent", self._identity.user_agent)
+
         try:
             # 使用异步 API，避免在 asyncio 循环中使用 sync Playwright
             response = await self._fetcher.async_fetch(
@@ -76,7 +94,7 @@ class StealthFetcher(BaseFetcher):
                 solve_cloudflare=solve_cloudflare,
                 timeout=timeout,
                 proxy=proxy,
-                extra_headers=headers,
+                extra_headers=effective_headers or None,
             )
 
             elapsed = time.time() - start
@@ -87,7 +105,7 @@ class StealthFetcher(BaseFetcher):
             html = (
                 (response.text if response.text else None)
                 or getattr(response, "html_content", None)
-                or (response.body.decode("utf-8") if isinstance(response.body, bytes) else str(response.body))
+                or (response.body.decode("utf-8", errors="replace") if isinstance(response.body, bytes) else str(response.body))
                 or ""
             )
             resp_headers = dict(getattr(response, "headers", {}))

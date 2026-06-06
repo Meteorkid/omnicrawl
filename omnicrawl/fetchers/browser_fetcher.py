@@ -45,6 +45,20 @@ class BrowserFetcher(BaseFetcher):
                 headless=self._headless,
             )
 
+    async def create_page(self, **context_kwargs):
+        """创建独立的浏览器页面（公开 API）
+
+        返回 (context, page) 元组，调用方负责关闭 context。
+        用于 SmartSpider 等需要独立页面的场景。
+
+        Args:
+            **context_kwargs: 传递给 browser.new_context() 的参数
+        """
+        await self._ensure_browser()
+        context = await self._browser.new_context(**context_kwargs)
+        page = await context.new_page()
+        return context, page
+
     async def fetch(
         self,
         url: str,

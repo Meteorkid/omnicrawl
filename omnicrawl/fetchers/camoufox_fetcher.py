@@ -19,9 +19,17 @@ class CamoufoxFetcher(BaseFetcher):
     - 自动随机化 OS/设备/字体/WebGL/屏幕等指纹
     - 人类化鼠标轨迹
     - GeoIP 自动匹配代理地理位置
+    - 指纹一致性检查（所有信号指向同一身份）
 
     用法:
         async with CamoufoxFetcher() as fetcher:
+            result = await fetcher.fetch("https://51job.com")
+
+        # 指定身份
+        from omnicrawl import FingerprintConsistency
+        fc = FingerprintConsistency()
+        identity = fc.get_identity("chrome_macos_m1")
+        async with CamoufoxFetcher(identity=identity) as fetcher:
             result = await fetcher.fetch("https://51job.com")
     """
 
@@ -36,6 +44,8 @@ class CamoufoxFetcher(BaseFetcher):
         locale: str = "zh-CN",
         os: Optional[str] = None,
         geoip: bool = True,
+        identity: Optional[object] = None,  # BrowserIdentity
+        proxy: Optional[str] = None,
     ):
         self._headless = headless
         self._humanize = humanize
@@ -44,14 +54,42 @@ class CamoufoxFetcher(BaseFetcher):
         self._locale = locale
         self._os = os
         self._geoip = geoip
+        self._identity = identity
+        self._proxy = proxy
         self._camoufox_class = None
         self._context_manager = None
         self._browser = None
+        self._js_overrides: dict[str, str] = {}
 
     async def _ensure_browser(self):
         """确保浏览器实例存在（复用）"""
         if self._browser is not None:
             return
+
+        # 指纹一致性：如果没有指定身份，自动选一个
+        fc = None
+        if self._identity is None:
+            try:
+                from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
+                fc = FingerprintConsistency()
+                self._identity = fc.random_identity()
+                logger.info("自动选择指纹身份: %s (%s)", self._identity.os, self._identity.browser_name)
+            except Exception as e:
+                logger.debug("指纹一致性模块不可用，跳过: %s", e)
+
+        # 从身份中提取 JS 覆盖（仅 navigator 相关，webgl/canvas 由 Camoufox 原生处理）
+        if self._identity is not None:
+            try:
+                if fc is None:
+                    from omnicrawl.anti_detect.fingerprint_consistency import FingerprintConsistency
+                    fc = FingerprintConsistency()
+                all_overrides = fc.get_js_overrides(self._identity)
+                self._js_overrides = {
+                    k: v for k, v in all_overrides.items()
+                    if k.startswith("navigator.")
+                }
+            except Exception:
+                pass
 
         if self._camoufox_class is None:
             from camoufox.async_api import AsyncCamoufox
@@ -65,15 +103,18 @@ class CamoufoxFetcher(BaseFetcher):
             "locale": self._locale,
             "geoip": self._geoip,
         }
-        if self._os:
-            kwargs["os"] = self._os
+        if self._proxy:
+            kwargs["proxy"] = {"server": self._proxy}
+        # 优先使用身份的 OS，其次用构造参数
+        effective_os = self._os or (self._identity.os if self._identity else None)
+        if effective_os:
+            kwargs["os"] = effective_os
 
         self._context_manager = self._camoufox_class(**kwargs)
         try:
             self._browser = await self._context_manager.__aenter__()
-            logger.info("Camoufox 浏览器已启动")
+            logger.info("Camoufox 浏览器已启动 (identity=%s)", self._identity.os if self._identity else "auto")
         except Exception:
-            # __aenter__ 失败时清理 _context_manager
             self._context_manager = None
             raise
 
@@ -95,6 +136,14 @@ class CamoufoxFetcher(BaseFetcher):
         try:
             page = await self._browser.new_page()
 
+            # 注入指纹一致性 JS 覆盖
+            if self._js_overrides:
+                js_code = self._build_fingerprint_js(self._js_overrides)
+                try:
+                    await page.add_init_script(js_code)
+                except Exception as e:
+                    logger.debug("指纹 JS 注入失败（不影响主流程）: %s", e)
+
             if headers:
                 await page.set_extra_http_headers(headers)
 
@@ -104,7 +153,7 @@ class CamoufoxFetcher(BaseFetcher):
                 await page.wait_for_selector(wait_for, timeout=int(timeout * 1000))
             else:
                 try:
-                    await page.wait_for_load_state("networkidle", timeout=min(int(timeout * 1000), 10000))
+                    await page.wait_for_load_state("networkidle", timeout=int(min(timeout, 30) * 1000))
                 except Exception:
                     pass
 
@@ -136,6 +185,25 @@ class CamoufoxFetcher(BaseFetcher):
                     await page.close()
                 except Exception:
                     pass  # 页面关闭失败不影响主流程
+
+    @staticmethod
+    def _build_fingerprint_js(overrides: dict[str, str]) -> str:
+        """将指纹覆盖字典转为 JS 注入代码"""
+        lines = ["(function(){"]
+        for prop, value in overrides.items():
+            if prop.startswith("navigator."):
+                key = prop.split(".", 1)[1]
+                lines.append(
+                    f'Object.defineProperty(navigator,"{key}",{{get:function(){{return {value};}}}});'
+                )
+            elif prop.startswith("webgl."):
+                # Camoufox 原生处理 WebGL 指纹，无需 JS 注入
+                logger.debug("跳过 webgl.* JS 覆盖（Camoufox 原生处理）: %s", prop)
+            elif prop.startswith("canvas."):
+                # Camoufox 原生处理 Canvas 指纹噪声，无需 JS 注入
+                logger.debug("跳过 canvas.* JS 覆盖（Camoufox 原生处理）: %s", prop)
+        lines.append("})();")
+        return "\n".join(lines)
 
     async def close(self):
         """关闭浏览器实例"""
