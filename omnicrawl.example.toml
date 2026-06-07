@@ -1,0 +1,37 @@
+# OmniCrawl 示例配置文件
+# 复制为 ~/.omnicrawl.toml 或项目目录下 omnicrawl.toml
+
+[default]
+mode = "auto"          # 抓取模式: auto, http, browser, camoufox, stealth
+format = "markdown"    # 输出格式: json, markdown, text, html
+fingerprint = "chrome" # TLS 指纹: chrome, firefox, safari, edge
+timeout = 30           # 超时时间（秒）
+max_retries = 2        # 最大重试次数
+
+# WAF 策略（可选）
+# [default.waf]
+# strategy = "aliyun_waf"  # 可选: aliyun_waf, cloudflare, imperva
+
+# 代理池（可选）
+# [default.proxy]
+# pool = [
+#     "http://proxy1:8080",
+#     "http://proxy2:8080",
+# ]
+
+# 预设：快速模式
+[presets.fast]
+mode = "http"
+timeout = 10
+
+# 预设：隐身模式
+[presets.stealth]
+mode = "stealth"
+fingerprint = "firefox"
+max_retries = 3
+
+# 预设：51job
+[presets.51job]
+mode = "camoufox"
+waf = { strategy = "aliyun_waf" }
+timeout = 60

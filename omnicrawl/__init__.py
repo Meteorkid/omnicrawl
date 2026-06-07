@@ -21,6 +21,8 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # Proxy
     "ProxyRotator": ("omnicrawl.proxy.rotator", "ProxyRotator"),
     "ProxyValidator": ("omnicrawl.proxy.validator", "ProxyValidator"),
+    "ProxyScorer": ("omnicrawl.proxy.scorer", "ProxyScorer"),
+    "ProxyStats": ("omnicrawl.proxy.scorer", "ProxyStats"),
     # Fingerprint
     "TLSFingerprint": ("omnicrawl.fingerprint.tls", "TLSFingerprint"),
     "FingerprintConsistency": ("omnicrawl.anti_detect.fingerprint_consistency", "FingerprintConsistency"),
@@ -42,9 +44,30 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "PageState": ("omnicrawl.parser.interactive_state", "PageState"),
     "InteractiveElement": ("omnicrawl.parser.interactive_state", "InteractiveElement"),
     # Spider
+    "Spider": ("omnicrawl.spider.base", "Spider"),
+    "CrawlSpider": ("omnicrawl.spider.base", "CrawlSpider"),
+    "SpiderItem": ("omnicrawl.spider.base", "SpiderItem"),
+    "SpiderStats": ("omnicrawl.spider.base", "SpiderStats"),
     "SmartSpider": ("omnicrawl.spider.smart_spider", "SmartSpider"),
     "ApiEndpoint": ("omnicrawl.spider.smart_spider", "ApiEndpoint"),
     "NetworkCapture": ("omnicrawl.spider.smart_spider", "NetworkCapture"),
+    "LinkExtractor": ("omnicrawl.spider.link_extractor", "LinkExtractor"),
+    "Pipeline": ("omnicrawl.spider.pipeline", "Pipeline"),
+    "CleanPipeline": ("omnicrawl.spider.pipeline", "CleanPipeline"),
+    "ValidatePipeline": ("omnicrawl.spider.pipeline", "ValidatePipeline"),
+    "DedupPipeline": ("omnicrawl.spider.pipeline", "DedupPipeline"),
+    "RedisDedupPipeline": ("omnicrawl.spider.pipeline", "RedisDedupPipeline"),
+    "JsonFilePipeline": ("omnicrawl.spider.pipeline", "JsonFilePipeline"),
+    # Storage
+    "StateStore": ("omnicrawl.storage", "StateStore"),
+    "MemoryStore": ("omnicrawl.storage", "MemoryStore"),
+    # Plugins
+    "Plugin": ("omnicrawl.plugins", "Plugin"),
+    "PluginManager": ("omnicrawl.plugins", "PluginManager"),
+    "LoggingPlugin": ("omnicrawl.plugins", "LoggingPlugin"),
+    "StatsPlugin": ("omnicrawl.plugins", "StatsPlugin"),
+    "FilterPlugin": ("omnicrawl.plugins", "FilterPlugin"),
+    "TransformPlugin": ("omnicrawl.plugins", "TransformPlugin"),
 }
 
 __all__ = list(_LAZY_IMPORTS.keys())

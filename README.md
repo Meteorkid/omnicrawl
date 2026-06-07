@@ -4,7 +4,8 @@
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/Tests-65%20passed-brightgreen.svg)]#测试)
+[![Tests](https://img.shields.io/badge/Tests-491%20passed-brightgreen.svg)](#测试)
+[![PyPI](https://img.shields.io/pypi/v/omnicrawl.svg)](https://pypi.org/project/omnicrawl/)
 
 ---
 
@@ -536,13 +537,21 @@ pytest tests/ -v --tb=short
 | 模块 | 测试数 | 覆盖内容 |
 |------|--------|----------|
 | `test_fingerprint.py` | 6 | TLS 指纹设置、轮换、随机 |
-| `test_proxy.py` | 9 | 代理轮换策略、空池检查、统计 |
-| `test_proxy_validator.py` | 5 | 代理健康检查、批量验证 |
+| `test_proxy.py` | 25 | 代理轮换、验证、评分、scored 策略 |
 | `test_rate_limiter.py` | 5 | 限速、退避、恢复、域名隔离 |
 | `test_waf_bypass.py` | 6 | WAF 策略配置、未知类型降级 |
 | `test_parser.py` | 14 | Markdown 转换、HTML 解析、Token 计数 |
 | `test_client.py` | 17 | OmniClient 集成、批量抓取、FetchResult |
-| **总计** | **65** | ✅ 全部通过 |
+| `test_client_unit.py` | 178 | Client 单元测试（session/fetch/fallback） |
+| `test_cli.py` | 34 | CLI 命令、配置解析、预设 |
+| `test_config.py` | 22 | TOML 配置、环境变量、合并 |
+| `test_proxy_scorer.py` | 27 | 代理评分、统计、prune |
+| `test_anti_detect.py` | 62 | 验证码检测/处理、指纹一致性、WAF 绕过 |
+| `test_link_extractor.py` | 14 | 链接提取、过滤、去重 |
+| `test_pipeline.py` | 20 | 数据管道（Clean/Validate/Dedup/JsonFile） |
+| `test_crawl_spider.py` | 15 | 深度爬取、断点续爬、链接跟踪 |
+| `test_smart_spider.py` | 26 | SmartSpider 编排 |
+| **总计** | **491** | ✅ 全部通过 |
 
 ---
 
@@ -553,6 +562,8 @@ omnicrawl/
 ├── omnicrawl/                  # 源代码
 │   ├── __init__.py             # 包入口
 │   ├── client.py               # OmniClient 统一入口
+│   ├── cli.py                  # CLI 入口（typer）
+│   ├── config.py               # TOML 配置
 │   ├── fetchers/               # 抓取器
 │   │   ├── base.py             # 基类 (FetchMode, FetchResult)
 │   │   ├── http_fetcher.py     # curl_cffi (最快)
@@ -563,24 +574,37 @@ omnicrawl/
 │   │   └── tls.py              # TLS 指纹 (37+ 浏览器)
 │   ├── proxy/                  # 代理管理
 │   │   ├── rotator.py          # 代理轮换器
-│   │   └── validator.py        # 代理健康检查
+│   │   ├── validator.py        # 代理健康检查
+│   │   └── scorer.py           # 代理质量评分
 │   ├── anti_detect/            # 反检测
 │   │   ├── rate_limiter.py     # 智能限速
-│   │   └── waf_bypass.py       # WAF 策略引擎
+│   │   ├── waf_bypass.py       # WAF 策略引擎
+│   │   ├── captcha_detector.py # 验证码检测
+│   │   ├── captcha_solver.py   # 验证码处理
+│   │   └── fingerprint_consistency.py  # 指纹一致性
 │   ├── parser/                 # 数据解析
 │   │   ├── html_parser.py      # HTML 解析 (CSS/XPath)
 │   │   └── markdown.py         # HTML → Markdown
 │   ├── spider/                 # Spider 框架
-│   │   └── base.py             # Spider 基类
+│   │   ├── base.py             # Spider + CrawlSpider
+│   │   ├── link_extractor.py   # 链接发现
+│   │   └── pipeline.py         # 数据管道
 │   └── utils/                  # 工具
 │       └── logger.py           # 日志
-├── tests/                      # 测试 (65 个用例)
+├── tests/                      # 测试 (491 个用例)
 ├── examples/                   # 示例
 │   ├── basic_scrape.py         # 基础爬取
 │   ├── bypass_waf.py           # WAF 绕过
 │   ├── llm_pipeline.py         # LLM 数据管道
-│   └── spider_example.py       # Spider 框架
+│   ├── spider_example.py       # Spider 框架
+│   ├── crawl_spider.py         # CrawlSpider 深度爬取
+│   ├── data_pipeline.py        # 数据管道
+│   └── cli_usage.sh            # CLI 使用示例
+├── docs/                       # mkdocs 文档
+├── .github/workflows/          # CI/CD
 ├── pyproject.toml              # 项目配置
+├── CONTRIBUTING.md             # 贡献指南
+├── CHANGELOG.md                # 变更日志
 └── README.md                   # 本文档
 ```
 

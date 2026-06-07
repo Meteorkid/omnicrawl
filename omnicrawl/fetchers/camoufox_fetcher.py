@@ -9,6 +9,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("camoufox_fetcher")
 
+__all__ = ["CamoufoxFetcher"]
+
 
 class CamoufoxFetcher(BaseFetcher):
     """基于 Camoufox 的反检测浏览器抓取器

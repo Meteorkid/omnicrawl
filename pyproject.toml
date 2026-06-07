@@ -2,13 +2,40 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["omnicrawl"]
+
+[tool.hatch.build.targets.sdist]
+include = ["omnicrawl/", "tests/", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
 [project]
 name = "omnicrawl"
-version = "0.1.0"
+version = "0.2.0"
 description = "无所不能的爬虫框架 — 整合 Scrapling + curl_cffi + Playwright，绕过 WAF，LLM 友好输出"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [{ name = "Meteor" }]
+keywords = ["crawler", "scraper", "waf-bypass", "anti-detection", "llm", "playwright", "camoufox"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Framework :: AsyncIO",
+]
 dependencies = [
     "curl_cffi>=0.15",
     "scrapling>=0.3",
@@ -19,11 +46,21 @@ dependencies = [
     "tiktoken>=0.5",
     "browserforge>=1.0",
     "msgspec>=0.18",
+    "typer>=0.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Meteorkid/omnicrawl"
+Documentation = "https://meteorkid.github.io/omnicrawl"
+Repository = "https://github.com/Meteorkid/omnicrawl"
+Issues = "https://github.com/Meteorkid/omnicrawl/issues"
+Changelog = "https://github.com/Meteorkid/omnicrawl/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 camoufox = ["camoufox>=0.4"]
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+redis = ["redis>=5.0"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "pytest-cov>=4.0", "fakeredis>=2.0"]
+docs = ["mkdocs>=1.5", "mkdocs-material>=9.0", "mkdocstrings[python]>=0.24"]
 
 [project.scripts]
-# omnicrawl = "omnicrawl.cli:main"  # TODO: 实现 CLI 后启用
+omnicrawl = "omnicrawl.cli:main"

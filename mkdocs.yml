@@ -1,0 +1,57 @@
+site_name: OmniCrawl
+site_description: 无所不能的爬虫框架
+site_url: https://meteorkid.github.io/omnicrawl
+repo_url: https://github.com/Meteorkid/omnicrawl
+repo_name: Meteorkid/omnicrawl
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - scheme: default
+      primary: blue
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: 切换暗色
+    - scheme: slate
+      primary: blue
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: 切换亮色
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+    - 安装: guides/installation.md
+    - 基础用法: guides/quickstart.md
+    - WAF 绕过: guides/waf-bypass.md
+    - Spider 爬虫: guides/spider.md
+    - CLI 命令行: guides/cli.md
+  - API 参考:
+    - OmniClient: api/client.md
+    - FetchMode: api/fetch-mode.md
+    - Spider: api/spider.md
+    - Pipeline: api/pipeline.md
+    - 代理管理: api/proxy.md
+    - 反检测: api/anti-detect.md
+    - 解析器: api/parser.md
+  - 路线图: roadmap.md

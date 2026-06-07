@@ -10,6 +10,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("stealth_fetcher")
 
+__all__ = ["StealthFetcher"]
+
 
 class StealthFetcher(BaseFetcher):
     """基于 Scrapling 的隐身抓取器

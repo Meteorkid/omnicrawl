@@ -13,6 +13,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("captcha_solver")
 
+__all__ = ["CaptchaType", "CaptchaChallenge", "CaptchaResult", "CaptchaDetector", "CaptchaSolver"]
+
 
 class CaptchaType(Enum):
     """验证码类型"""

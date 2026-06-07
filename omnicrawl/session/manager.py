@@ -16,6 +16,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("session")
 
+__all__ = ["BrowserHandle", "Session", "SessionManager"]
+
 
 @dataclass
 class BrowserHandle:
@@ -198,37 +200,37 @@ class SessionManager:
         """按 desc 语义匹配浏览器
 
         匹配策略：
-        1. 优先精确子串匹配
+        1. 优先精确子串匹配（score=1000）
         2. 回退到分词匹配（按空格分割 task_desc，统计命中的词数）
         """
         task_lower = task_desc.lower()
         best_match: Optional[BrowserHandle] = None
-        best_score = -1
+        best_score = 0
 
         for browser in self._browsers.values():
-            desc_lower = browser.desc.lower()
-
-            # 精确子串匹配：直接包含则高分
-            if task_lower in desc_lower:
-                score = 1000  # 精确匹配权重远高于分词
-                if score > best_score:
-                    best_score = score
-                    best_match = browser
-                continue
-
-            # 分词匹配：按空格分割，统计命中的词数
-            words = task_lower.split()
-            score = sum(1 for word in words if word in desc_lower)
+            score = self._match_score(task_lower, browser.desc.lower())
             if score > best_score:
                 best_score = score
                 best_match = browser
 
-        if best_match and best_score > 0:
+        if best_match:
             logger.debug(f"按 '{task_desc}' 匹配到浏览器 '{best_match.name}' (score={best_score})")
-            return best_match
+        else:
+            logger.debug(f"按 '{task_desc}' 未匹配到任何浏览器")
+        return best_match
 
-        logger.debug(f"按 '{task_desc}' 未匹配到任何浏览器")
-        return None
+    @staticmethod
+    def _match_score(query: str, desc: str) -> int:
+        """计算 query 与 desc 的匹配分数
+
+        Returns:
+            0 = 无匹配, >0 = 命中分数
+        """
+        # 精确子串匹配：权重远高于分词
+        if query in desc:
+            return 1000
+        # 分词匹配：统计命中的词数
+        return sum(1 for word in query.split() if word in desc)
 
     def append_desc(self, browser_name: str, info: str):
         """追加经验到浏览器 desc"""
@@ -259,33 +261,31 @@ class SessionManager:
         async with self._lock:
             if browser._browser is not None:
                 return
-            return
 
-        logger.info(f"懒加载浏览器实例: {browser.name} [{browser.mode.value}]")
+            logger.info(f"懒加载浏览器实例: {browser.name} [{browser.mode.value}]")
 
-        if browser.mode == FetchMode.BROWSER:
-            from omnicrawl.fetchers.browser_fetcher import BrowserFetcher
-            fetcher = BrowserFetcher()
-            await fetcher._ensure_browser()
-            browser._browser = fetcher
+            if browser.mode == FetchMode.BROWSER:
+                from omnicrawl.fetchers.browser_fetcher import BrowserFetcher
+                fetcher = BrowserFetcher()
+                await fetcher._ensure_browser()
+                browser._browser = fetcher
 
-        elif browser.mode == FetchMode.CAMOUFOX:
-            from omnicrawl.fetchers.camoufox_fetcher import CamoufoxFetcher
-            fetcher = CamoufoxFetcher(proxy=browser.proxy)
-            await fetcher._ensure_browser()
-            browser._browser = fetcher
+            elif browser.mode == FetchMode.CAMOUFOX:
+                from omnicrawl.fetchers.camoufox_fetcher import CamoufoxFetcher
+                fetcher = CamoufoxFetcher(proxy=browser.proxy)
+                await fetcher._ensure_browser()
+                browser._browser = fetcher
 
-        elif browser.mode == FetchMode.STEALTH:
-            from omnicrawl.fetchers.stealth_fetcher import StealthFetcher
-            fetcher = StealthFetcher()
-            browser._browser = fetcher
+            elif browser.mode == FetchMode.STEALTH:
+                from omnicrawl.fetchers.stealth_fetcher import StealthFetcher
+                fetcher = StealthFetcher()
+                browser._browser = fetcher
 
-        elif browser.mode == FetchMode.HTTP:
-            # HTTP 模式不创建浏览器实例
-            logger.info(f"浏览器 '{browser.name}' 使用 HTTP 模式，跳过浏览器实例创建")
+            elif browser.mode == FetchMode.HTTP:
+                logger.info(f"浏览器 '{browser.name}' 使用 HTTP 模式，跳过浏览器实例创建")
 
-        else:
-            logger.warning(f"浏览器 '{browser.name}' 使用未知模式 {browser.mode.value}，跳过实例创建")
+            else:
+                logger.warning(f"浏览器 '{browser.name}' 使用未知模式 {browser.mode.value}，跳过实例创建")
 
     async def _reap_expired_sessions(self):
         """回收过期 session"""

@@ -12,6 +12,9 @@ if TYPE_CHECKING:
     from omnicrawl.parser.interactive_state import PageState
 
 
+__all__ = ["FetchMode", "FetchResult", "BaseFetcher"]
+
+
 class FetchMode(Enum):
     """抓取模式"""
     HTTP = "http"          # 纯 HTTP（curl_cffi，最快）

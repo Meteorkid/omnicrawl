@@ -27,6 +27,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("client")
 
+__all__ = ["OmniClient", "FALLBACK_ORDER"]
+
 # 被封时的降级顺序（从快到慢，从弱到强）
 FALLBACK_ORDER = [FetchMode.HTTP, FetchMode.BROWSER, FetchMode.CAMOUFOX, FetchMode.STEALTH]
 

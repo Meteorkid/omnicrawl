@@ -15,6 +15,8 @@ from omnicrawl.utils.logger import get_logger
 
 logger = get_logger("interactive_state")
 
+__all__ = ["InteractiveElement", "PageState", "InteractiveStateExtractor"]
+
 
 # 可交互的 HTML 标签
 INTERACTIVE_TAGS = {
