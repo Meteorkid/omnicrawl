@@ -5,7 +5,7 @@
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-491%20passed-brightgreen.svg)](#测试)
-[![PyPI](https://img.shields.io/pypi/v/omnicrawl.svg)](https://pypi.org/project/omnicrawl/)
+[![PyPI](https://img.shields.io/pypi/v/omnicrawl-core.svg)](https://pypi.org/project/omnicrawl-core/)
 
 ---
 
@@ -72,6 +72,14 @@
 ---
 
 ## 安装
+
+### 从 PyPI 安装（推荐）
+
+```bash
+pip install omnicrawl-core
+```
+
+### 从源码安装
 
 ```bash
 # 克隆仓库
