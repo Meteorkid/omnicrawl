@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-06-07
+
+### Added
+
+- **StateStore 抽象** — 统一内存和分布式存储接口（KV/集合/列表/哈希）
+- **RedisStore** — Redis 分布式后端，多 worker 共享状态
+- **分布式 CrawlSpider** — `store` 参数，visited/queue 委托给 StateStore
+- **RedisDedupPipeline** — 跨进程去重
+- **插件系统** — Plugin ABC（6 钩子）+ PluginManager + 内置插件
+- **内置插件** — LoggingPlugin, StatsPlugin, FilterPlugin, TransformPlugin
+- **配置扩展** — `[storage]` 节（backend/redis_url/key_prefix）
+- **文档站点** — mkdocs-material + mkdocstrings
+- **CI/CD** — GitHub Actions（test/publish/docs 三个 workflow）
+- **贡献指南** — CONTRIBUTING.md
+
 ## [0.1.0] - 2026-06-05
 
 ### Added
