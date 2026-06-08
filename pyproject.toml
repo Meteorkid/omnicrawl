@@ -15,7 +15,7 @@ addopts = "-v --tb=short"
 
 [project]
 name = "omnicrawl-core"
-version = "0.2.2"
+version = "0.3.0"
 description = "无所不能的爬虫框架 — 整合 Scrapling + curl_cffi + Playwright，绕过 WAF，LLM 友好输出"
 readme = "README.md"
 requires-python = ">=3.10"

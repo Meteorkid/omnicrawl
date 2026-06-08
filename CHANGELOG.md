@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-06-08
+
+### Added
+
+- **Session 轮换** — 请求计数+存活时间追踪，自动轮换防指纹关联（`should_rotate()` + `rotate_session()`）
+- **Per-proxy 令牌桶限速** — 每代理独立速率控制（`TokenBucket` + `next_available()`）
+- **空结果缓存** — 记录空 URL，TTL 内跳过重复请求（`QueryCache` + `query_cache_ttl` 参数）
+
+### Fixed
+
+- `rotate_session`/`close_session`/`close_browser` 锁内 await 重构为"锁内收集→锁外 IO"模式
+- `ProxyRotator.remove()` 同步清理令牌桶
+- 缓存 key 纳入请求参数（method/data/json），避免 POST 不同 body 同 key
+- 空结果缓存跳过 status 200/301/302，避免 SPA 空页面误缓存
+
 ## [0.2.0] - 2026-06-07
 
 ### Added
