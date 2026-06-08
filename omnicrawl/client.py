@@ -88,6 +88,7 @@ class OmniClient:
         auto_fallback: bool = True,
         session_manager: Optional[object] = None,  # SessionManager 实例或 True 自动创建
         captcha_api_key: Optional[str] = None,      # 验证码云端 API key
+        query_cache_ttl: float = 0,                 # 查询缓存 TTL（秒），0=不启用
     ):
         self._mode = mode
         self._max_retries = max_retries
@@ -130,6 +131,12 @@ class OmniClient:
 
         # 抓取器缓存
         self._fetchers: dict[FetchMode, object] = {}
+
+        # 查询缓存（可选）
+        self._query_cache = None
+        if query_cache_ttl > 0:
+            from omnicrawl.utils.cache import QueryCache
+            self._query_cache = QueryCache(ttl=query_cache_ttl)
 
         # 预选一个指纹身份，供所有 fetcher 复用
         self._identity = None
@@ -193,6 +200,29 @@ class OmniClient:
             target_mode = FetchMode.HTTP  # 默认从最快的开始
 
         proxy = proxy or self._get_proxy()
+
+        # 查询缓存：检查已知空结果（key 包含 URL + 请求参数）
+        if self._query_cache is not None:
+            cache_params = {}
+            if method != "GET":
+                cache_params["method"] = method
+            for k in ("data", "json"):
+                if k in kwargs and kwargs[k] is not None:
+                    cache_params[k] = str(kwargs[k])[:200]  # 截断避免 key 过长
+            cache_key = self._query_cache.make_key(url, cache_params or None)
+            if self._query_cache.is_known_empty(cache_key):
+                logger.debug("查询缓存命中（空结果）: %s", url)
+                return FetchResult(
+                    url=url,
+                    html="",
+                    status_code=0,
+                    headers={},
+                    cookies={},
+                    mode_used=FetchMode.HTTP,
+                    elapsed=0.0,
+                    text="[缓存] 已知空结果，跳过",
+                )
+
         await self._rate_limiter.wait(url)
 
         result = await self._fetch_with_retry(
@@ -219,6 +249,20 @@ class OmniClient:
             self._rate_limiter.report_blocked(url)
         else:
             self._rate_limiter.report_success(url)
+
+        # 查询缓存：只缓存真正无内容的响应（跳过 200 空页面，可能是 SPA）
+        if (self._query_cache is not None
+                and not result.html
+                and not result.blocked
+                and result.status_code not in (200, 301, 302)):
+            cache_params = {}
+            if method != "GET":
+                cache_params["method"] = method
+            for k in ("data", "json"):
+                if k in kwargs and kwargs[k] is not None:
+                    cache_params[k] = str(kwargs[k])[:200]
+            cache_key = self._query_cache.make_key(url, cache_params or None)
+            self._query_cache.record_empty(cache_key)
 
         return result
 
@@ -286,6 +330,24 @@ class OmniClient:
             raise RuntimeError("Session 管理器未启用，请设置 session_manager=True")
         return await self._session_mgr.close_session(session_name)
 
+    async def rotate_session(self, browser_name: str, session_name: str):
+        """轮换 Session（防指纹关联：关旧 page → 开新 page，cookie 保留）"""
+        if self._session_mgr is None:
+            raise RuntimeError("Session 管理器未启用，请设置 session_manager=True")
+        return await self._session_mgr.rotate_session(browser_name, session_name)
+
+    def check_session_rotation(self, session) -> bool:
+        """检查 Session 是否需要轮换（供用户在请求前调用）
+
+        用法:
+            session = await client.open_session("main", "search")
+            if client.check_session_rotation(session):
+                session = await client.rotate_session("main", "search")
+        """
+        if hasattr(session, "should_rotate"):
+            return session.should_rotate()
+        return False
+
     def find_browser(self, task_desc: str):
         """按语义描述匹配浏览器"""
         if self._session_mgr is None:
@@ -338,7 +400,13 @@ class OmniClient:
         mode: FetchMode,
         **kwargs,
     ) -> FetchResult:
-        """带重试和自动降级的抓取"""
+        """带重试和自动降级的抓取
+
+        延迟策略：指数退避 + 随机抖动（避免雷群效应）
+        指纹策略：每次重试轮换 TLS 指纹
+        """
+        import random as _random
+
         last_error = None
         for attempt in range(self._max_retries + 1):
             try:
@@ -346,7 +414,10 @@ class OmniClient:
             except Exception as e:
                 last_error = e
                 if attempt < self._max_retries:
-                    delay = 1.0 * (2 ** attempt)
+                    # 指数退避 + 随机抖动（±30%）
+                    base_delay = 1.0 * (2 ** attempt)
+                    jitter = base_delay * 0.3 * (_random.random() * 2 - 1)
+                    delay = max(0.5, base_delay + jitter)
                     logger.warning(f"重试 {attempt + 1}/{self._max_retries}: {e}, {delay:.1f}s 后重试")
                     await asyncio.sleep(delay)
                     self._tls.next()  # 轮换指纹

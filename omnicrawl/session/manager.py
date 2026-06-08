@@ -41,8 +41,24 @@ class Session:
     browser_id: str
     created_at: float = field(default_factory=time.time)
     last_used: float = field(default_factory=time.time)
+    _request_count: int = 0             # 已发请求计数
+    _max_requests: int = 100            # 最大请求数（超过则轮换）
+    _max_age: float = 1800.0            # 最长存活时间（秒，默认 30 分钟）
     _page: object = field(default=None, repr=False)
     _cookies: dict = field(default_factory=dict)
+
+    def should_rotate(self) -> bool:
+        """判断是否需要轮换（按请求计数或存活时间）"""
+        if self._request_count >= self._max_requests:
+            return True
+        if time.time() - self.created_at > self._max_age:
+            return True
+        return False
+
+    def tick(self):
+        """请求计数 +1，更新最后使用时间"""
+        self._request_count += 1
+        self.last_used = time.time()
 
 
 class SessionManager:
@@ -146,6 +162,8 @@ class SessionManager:
 
     async def close_session(self, session_name: str):
         """关闭 Session，cookie 保留到浏览器"""
+        page_to_close = None
+
         async with self._lock:
             for browser in self._browsers.values():
                 if session_name in browser._sessions:
@@ -156,20 +174,87 @@ class SessionManager:
                         browser._cookies.update(session._cookies)
                         logger.debug(f"Session '{session_name}' 的 {len(session._cookies)} 个 cookie 已保存到浏览器 '{browser.name}'")
 
-                    # 关闭底层 page
-                    if session._page is not None:
-                        try:
-                            await session._page.close()
-                        except Exception as e:
-                            logger.debug("页面关闭异常: %s", e)
-
+                    page_to_close = session._page
                     logger.info(f"关闭 Session: {session_name}")
-                    return
+                    break
+            else:
+                logger.warning(f"Session '{session_name}' 不存在，跳过关闭")
+                return
 
-            logger.warning(f"Session '{session_name}' 不存在，跳过关闭")
+        # 锁外执行 IO 操作
+        if page_to_close is not None:
+            try:
+                await page_to_close.close()
+            except Exception as e:
+                logger.debug("页面关闭异常: %s", e)
+
+    async def rotate_session(self, browser_name: str, session_name: str) -> Session:
+        """轮换 Session — 关闭旧的，打开新的（防指纹关联）
+
+        轮换时机：
+        - 请求数达到 _max_requests
+        - 存活时间超过 _max_age
+
+        轮换后：
+        - 关闭旧 page（cookie 保留到浏览器）
+        - 创建新 Session（同名替换）
+        - 重置请求计数
+        """
+        page_to_close = None
+        new_session = None
+
+        async with self._lock:
+            if browser_name not in self._browsers:
+                raise KeyError(f"浏览器 '{browser_name}' 不存在")
+
+            browser = self._browsers[browser_name]
+            old_session = browser._sessions.get(session_name)
+
+            if old_session is None:
+                # session 不存在，直接创建新的（避免递归调用 open_session 死锁）
+                new_session = Session(
+                    name=session_name,
+                    browser_id=browser.id,
+                )
+                browser._sessions[session_name] = new_session
+                browser.last_used = time.time()
+                logger.info("Session '%s' 不存在，创建新的", session_name)
+                return new_session
+
+            # 保存 cookie、准备关闭 page
+            if old_session._cookies:
+                browser._cookies.update(old_session._cookies)
+            page_to_close = old_session._page
+
+            # 创建新 Session（同名替换）
+            new_session = Session(
+                name=session_name,
+                browser_id=browser.id,
+            )
+            browser._sessions[session_name] = new_session
+            browser.last_used = time.time()
+
+            logger.info(
+                "♻️ Session 已轮换: %s @ %s (请求数=%d, 存活=%.0fs)",
+                session_name, browser_name,
+                old_session._request_count,
+                time.time() - old_session.created_at,
+            )
+
+        # 锁外执行 IO 操作
+        if page_to_close is not None:
+            try:
+                await page_to_close.close()
+            except Exception as e:
+                logger.debug("轮换时页面关闭异常: %s", e)
+
+        return new_session
 
     async def close_browser(self, browser_name: str):
         """关闭浏览器及其所有 Session"""
+        pages_to_close = []
+        browser_instance = None
+
         async with self._lock:
             if browser_name not in self._browsers:
                 logger.warning(f"浏览器 '{browser_name}' 不存在，跳过关闭")
@@ -177,24 +262,29 @@ class SessionManager:
 
             browser = self._browsers.pop(browser_name)
 
-            # 关闭所有 session 的 page
+            # 收集需要关闭的 page
             for session in browser._sessions.values():
                 if session._page is not None:
-                    try:
-                        await session._page.close()
-                    except Exception as e:
-                        logger.debug("页面关闭异常: %s", e)
+                    pages_to_close.append(session._page)
 
-            # 关闭底层浏览器实例
-            if browser._browser is not None:
-                try:
-                    if hasattr(browser._browser, "close"):
-                        await browser._browser.close()
-                except Exception as e:
-                    logger.warning(f"关闭浏览器 '{browser_name}' 实例异常: {e}")
-                browser._browser = None
+            browser_instance = browser._browser
 
-            logger.info(f"关闭浏览器: {browser_name} (含 {len(browser._sessions)} 个 session)")
+        # 锁外执行 IO 操作
+        for page in pages_to_close:
+            try:
+                await page.close()
+            except Exception as e:
+                logger.debug("页面关闭异常: %s", e)
+
+        # 关闭底层浏览器实例
+        if browser_instance is not None:
+            try:
+                if hasattr(browser_instance, "close"):
+                    await browser_instance.close()
+            except Exception as e:
+                logger.warning(f"关闭浏览器 '{browser_name}' 实例异常: {e}")
+
+        logger.info(f"关闭浏览器: {browser_name} (含 {len(pages_to_close)} 个 page)")
 
     def find_browser(self, task_desc: str) -> Optional[BrowserHandle]:
         """按 desc 语义匹配浏览器
@@ -288,25 +378,28 @@ class SessionManager:
                 logger.warning(f"浏览器 '{browser.name}' 使用未知模式 {browser.mode.value}，跳过实例创建")
 
     async def _reap_expired_sessions(self):
-        """回收过期 session"""
+        """回收过期 session（调用方需持有 self._lock）"""
         now = time.time()
-        expired = []
+        pages_to_close = []
 
         for browser in self._browsers.values():
-            for session_name, session in browser._sessions.items():
-                if now - session.last_used > self.SESSION_TTL:
-                    expired.append((browser.name, session_name))
-
-        for browser_name, session_name in expired:
-            logger.info(f"回收过期 Session: {session_name}")
-            browser = self._browsers.get(browser_name)
-            if browser:
+            expired = [
+                name for name, s in browser._sessions.items()
+                if now - s.last_used > self.SESSION_TTL
+            ]
+            for session_name in expired:
                 session = browser._sessions.pop(session_name, None)
                 if session and session._page is not None:
-                    try:
-                        await session._page.close()
-                    except Exception as e:
-                        logger.debug("页面关闭异常: %s", e)
+                    pages_to_close.append(session._page)
+                    logger.info(f"回收过期 Session: {session_name}")
+
+        # page.close() 是 IO，但回收是低频操作，此处直接 await
+        # 若需优化可收集后在锁外关闭，但会增加复杂度
+        for page in pages_to_close:
+            try:
+                await page.close()
+            except Exception as e:
+                logger.debug("页面关闭异常: %s", e)
 
     async def close_all(self):
         """关闭所有浏览器和 session"""

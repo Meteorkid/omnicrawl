@@ -371,3 +371,83 @@ class TestReapExpired:
         session.last_used = time.time() - mgr.SESSION_TTL - 1
         # 不应抛异常
         await mgr._reap_expired_sessions()
+
+
+# ===========================================================================
+# Session 轮换
+# ===========================================================================
+
+class TestSessionRotation:
+    def test_should_rotate_by_count(self):
+        s = Session(name="s1", browser_id="b1", _max_requests=10)
+        for _ in range(10):
+            s.tick()
+        assert s.should_rotate() is True
+
+    def test_should_rotate_by_age(self):
+        s = Session(name="s1", browser_id="b1", _max_age=0)
+        assert s.should_rotate() is True
+
+    def test_should_not_rotate_fresh(self):
+        s = Session(name="s1", browser_id="b1", _max_requests=100, _max_age=3600)
+        assert s.should_rotate() is False
+
+    def test_tick_increments_count(self):
+        s = Session(name="s1", browser_id="b1")
+        assert s._request_count == 0
+        s.tick()
+        s.tick()
+        assert s._request_count == 2
+
+    @pytest.mark.asyncio
+    async def test_rotate_session_basic(self):
+        mgr = SessionManager()
+        await mgr.create_browser("main", mode=FetchMode.CAMOUFOX)
+        old_session = await mgr.open_session("main", "search")
+        old_session._cookies = {"token": "abc"}
+        old_session._request_count = 50
+
+        new_session = await mgr.rotate_session("main", "search")
+
+        assert new_session is not old_session
+        assert new_session._request_count == 0
+        assert new_session.name == "search"
+        # cookie 应保留到浏览器
+        assert mgr._browsers["main"]._cookies == {"token": "abc"}
+
+    @pytest.mark.asyncio
+    async def test_rotate_closes_old_page(self):
+        mgr = SessionManager()
+        await mgr.create_browser("main", mode=FetchMode.CAMOUFOX)
+        old_session = await mgr.open_session("main", "search")
+        mock_page = AsyncMock()
+        old_session._page = mock_page
+
+        await mgr.rotate_session("main", "search")
+        mock_page.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rotate_nonexistent_session_creates_new(self):
+        mgr = SessionManager()
+        await mgr.create_browser("main", mode=FetchMode.CAMOUFOX)
+        new_session = await mgr.rotate_session("main", "new_search")
+        assert new_session.name == "new_search"
+        assert len(mgr.list_sessions()) == 1
+
+    @pytest.mark.asyncio
+    async def test_rotate_nonexistent_browser_raises(self):
+        mgr = SessionManager()
+        with pytest.raises(KeyError, match="不存在"):
+            await mgr.rotate_session("nope", "s1")
+
+    @pytest.mark.asyncio
+    async def test_rotate_page_exception_handled(self):
+        mgr = SessionManager()
+        await mgr.create_browser("main", mode=FetchMode.CAMOUFOX)
+        old_session = await mgr.open_session("main", "search")
+        mock_page = AsyncMock()
+        mock_page.close.side_effect = Exception("crash")
+        old_session._page = mock_page
+        # 不应抛异常
+        new_session = await mgr.rotate_session("main", "search")
+        assert new_session._request_count == 0

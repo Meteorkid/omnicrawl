@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from omnicrawl.proxy.rotator import ProxyRotator
+from omnicrawl.proxy.rotator import ProxyRotator, TokenBucket
 from omnicrawl.proxy.validator import ProxyStatus, ProxyValidator
 
 
@@ -183,3 +183,95 @@ class TestProxyValidator:
         assert status.latency == 0.0
         assert status.fail_count == 0
         assert status.error == ""
+
+
+# ════════════════════════════════════════════════════════════════════════
+# TokenBucket
+# ════════════════════════════════════════════════════════════════════════
+
+
+class TestTokenBucket:
+    def test_acquire_initial_burst(self):
+        bucket = TokenBucket(rate_per_minute=60)  # 1/sec, burst=6
+        # 初始 burst 应该能连续获取
+        for _ in range(6):
+            assert bucket.acquire() is True
+
+    def test_acquire_exhausted(self):
+        bucket = TokenBucket(rate_per_minute=60)
+        # 耗尽 burst
+        for _ in range(6):
+            bucket.acquire()
+        # 再获取应该失败
+        assert bucket.acquire() is False
+
+    def test_wait_time_returns_positive_when_empty(self):
+        bucket = TokenBucket(rate_per_minute=60)
+        for _ in range(6):
+            bucket.acquire()
+        wait = bucket.wait_time()
+        assert wait > 0
+
+    def test_wait_time_zero_when_available(self):
+        bucket = TokenBucket(rate_per_minute=60)
+        assert bucket.wait_time() == 0.0
+
+    def test_burst_is_10_percent_of_rate(self):
+        bucket = TokenBucket(rate_per_minute=100)
+        assert bucket.burst == 10  # 100/10 = 10
+
+
+# ════════════════════════════════════════════════════════════════════════
+# ProxyRotator 限速集成
+# ════════════════════════════════════════════════════════════════════════
+
+
+class TestProxyRotatorRateLimit:
+    def test_rate_limit_creates_buckets(self):
+        rotator = ProxyRotator(
+            ["http://p1:8080", "http://p2:8080"],
+            rate_per_minute=30,
+        )
+        assert len(rotator._buckets) == 2
+
+    def test_next_available_returns_proxy(self):
+        rotator = ProxyRotator(
+            ["http://p1:8080", "http://p2:8080"],
+            rate_per_minute=30,
+        )
+        proxy = rotator.next_available()
+        assert proxy in ["http://p1:8080", "http://p2:8080"]
+
+    def test_next_available_returns_none_when_exhausted(self):
+        rotator = ProxyRotator(
+            ["http://p1:8080"],
+            rate_per_minute=1,  # 极低速率
+        )
+        # 耗尽 burst
+        for _ in range(1):  # burst = max(1/10, 1) = 1
+            rotator.next_available()
+        # 应该返回 None（或下一个代理如果有多个）
+        result = rotator.next_available()
+        # 单代理耗尽后返回 None
+        assert result is None
+
+    def test_get_wait_time(self):
+        rotator = ProxyRotator(
+            ["http://p1:8080"],
+            rate_per_minute=60,
+        )
+        # 初始等待时间为 0
+        assert rotator.get_wait_time("http://p1:8080") == 0.0
+
+    def test_get_wait_time_unknown_proxy(self):
+        rotator = ProxyRotator(["http://p1:8080"], rate_per_minute=60)
+        assert rotator.get_wait_time("http://unknown:8080") == 0.0
+
+    def test_add_creates_bucket(self):
+        rotator = ProxyRotator(["http://p1:8080"], rate_per_minute=30)
+        rotator.add("http://p2:8080")
+        assert "http://p2:8080" in rotator._buckets
+
+    def test_no_rate_limit_no_buckets(self):
+        rotator = ProxyRotator(["http://p1:8080"])
+        assert len(rotator._buckets) == 0

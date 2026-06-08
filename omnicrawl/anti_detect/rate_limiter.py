@@ -70,7 +70,11 @@ class RateLimiter:
         logger.warning(f"域名 {domain} 被封 {count} 次，延时调整为 {new_delay:.1f}s")
 
     def report_success(self, url: str) -> None:
-        """报告成功，逐步恢复延时"""
+        """报告成功，逐步恢复延时
+
+        连续成功时加速恢复：每次成功减少 block_count，
+        让延时更快回到 min_delay（模仿猎聘爬虫的自适应策略）。
+        """
         domain = self._get_domain(url)
         if domain in self._block_count and self._block_count[domain] > 0:
             self._block_count[domain] = max(0, self._block_count[domain] - 1)
@@ -79,3 +83,6 @@ class RateLimiter:
                 self._domain_delays.get(domain, self._min_delay) / self._backoff_factor,
             )
             self._domain_delays[domain] = new_delay
+        elif domain not in self._block_count or self._block_count[domain] == 0:
+            # 已恢复到基线，保持 min_delay 不变
+            self._domain_delays[domain] = self._min_delay
