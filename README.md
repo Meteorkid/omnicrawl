@@ -7,6 +7,8 @@
 [![Tests](https://img.shields.io/badge/Tests-491%20passed-brightgreen.svg)](#测试)
 [![PyPI](https://img.shields.io/pypi/v/omnicrawl-core.svg)](https://pypi.org/project/omnicrawl-core/)
 
+> 下载 · 文档 · 更新：<https://www.imagentx.top/zh/products/omnicrawl>
+
 ---
 
 ## 📖 目录
