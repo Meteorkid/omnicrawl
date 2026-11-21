@@ -3,7 +3,7 @@
 **无所不能的爬虫框架** — 整合 Scrapling + curl_cffi + Playwright，绕过 WAF，LLM 友好输出。
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/Tests-491%20passed-brightgreen.svg)](#测试)
 [![PyPI](https://img.shields.io/pypi/v/omnicrawl-core.svg)](https://pypi.org/project/omnicrawl-core/)
 
@@ -678,4 +678,4 @@ OMNICRAWL_LOG_LEVEL=DEBUG python your_script.py
 
 ## License
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+Apache License 2.0 - 详见 [LICENSE](LICENSE) 文件

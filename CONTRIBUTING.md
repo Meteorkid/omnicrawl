@@ -96,4 +96,4 @@ omnicrawl/
 
 ## License
 
-贡献的代码将按照 MIT License 发布。
+贡献的代码将按照 Apache License 2.0 发布。

@@ -19,13 +19,13 @@ version = "0.4.0"
 description = "无所不能的爬虫框架 — 整合 Scrapling + curl_cffi + Playwright，绕过 WAF，LLM 友好输出"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "Apache-2.0"
 authors = [{ name = "Meteor" }]
 keywords = ["crawler", "scraper", "waf-bypass", "anti-detection", "llm", "playwright", "camoufox"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
