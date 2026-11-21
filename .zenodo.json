@@ -1,0 +1,35 @@
+{
+  "title": "OmniCrawl: A Universal Web Crawling Framework",
+  "description": "<p>OmniCrawl is a Python web crawling framework combining Scrapling, curl_cffi and Playwright to handle anti-bot pages, browser-rendered content and structured extraction in one pipeline. It is used as the crawling backbone of several Meteor Store tools.</p>",
+  "creators": [
+    {
+      "name": "Liu, Xinyu",
+      "affiliation": "Guangdong Polytechnic Normal University",
+      "orcid": "0009-0000-6888-0110"
+    }
+  ],
+  "upload_type": "software",
+  "license": "Apache-2.0",
+  "access_right": "open",
+  "language": "eng",
+  "keywords": [
+    "web crawling",
+    "python",
+    "scrapling",
+    "curl_cffi",
+    "playwright",
+    "data extraction"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://pypi.org/project/omnicrawl-core/",
+      "relation": "isSupplementedBy",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://github.com/Meteorkid/omnicrawl",
+      "relation": "isIdenticalTo",
+      "resource_type": "software"
+    }
+  ]
+}
